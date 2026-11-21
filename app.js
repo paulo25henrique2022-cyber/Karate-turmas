@@ -147,6 +147,13 @@ function editarFaixas() {
     <label class="campo" style="margin-top:12px">Duração de cada aula (horas)<input id="fxAula" type="number" min="0.25" step="0.25" inputmode="decimal" value="${D.aulaHoras}"></label>
     <p class="pq">Referência: 3 aulas de 1h30 por semana durante 6 meses ≈ 117 h.</p>
     <div class="linha"><button class="btn verde grow" onclick="salvarFaixas()">Salvar</button><button class="btn" onclick="fecharModal()">Cancelar</button></div>
+    <h2 style="margin-top:22px">📧 Envio automático por e-mail</h2>
+    <p class="pq">Ao finalizar a chamada, a lista em PDF é enviada sozinha para o e-mail abaixo. Sem internet, ela fica guardada e sai quando a conexão voltar.</p>
+    <label class="campo">Link do script (Apps Script)<input id="emUrl" value="${esc(D.email?.url)}" placeholder="https://script.google.com/macros/s/.../exec"></label>
+    <label class="campo">Enviar para (pode pôr mais de um, separados por vírgula)<input id="emPara" type="email" multiple value="${esc(D.email?.para)}" placeholder="professor@gmail.com"></label>
+    <label class="campo">Código secreto (o mesmo do script)<input id="emCod" value="${esc(D.email?.codigo)}"></label>
+    <div class="linha"><button class="btn verde grow" onclick="salvarEmail()">Salvar e-mail</button><button class="btn" onclick="testarEmail()">Testar envio</button></div>
+    <p class="pq" id="emStatus">${filaEmail().length ? `⏳ ${filaEmail().length} lista(s) aguardando internet para envio.` : ''}</p>
     <h2 style="margin-top:22px">Cópia de segurança</h2>
     <p class="pq">Os dados ficam só neste celular. Faça uma cópia de vez em quando e guarde no WhatsApp ou no Drive.</p>
     <div class="linha"><button class="btn grow" onclick="backup()">💾 Fazer cópia</button><label class="btn grow" style="text-align:center">📂 Restaurar<input type="file" accept=".json,application/json" hidden onchange="restaurar(this.files[0])"></label></div>`);
@@ -207,6 +214,9 @@ async function finalizar(t) {
     }
   });
   D.turmas[t].ultimaChamada = hoje(); salvar();
+  if (D.email?.url) {
+    enfileirarEmail({ turma: TURMAS[t], data: dataBR(hoje()), alunos: alunos.map(a => ({ nome: a.nome, faixa: nomeFaixa(a.faixa), presente: marcas[a.id] === 'p' })) });
+  }
   const pdf = pdfChamada(t, alunos);
   marcas = {}; render();
   if (novosProntos.length) alert(`🥋 Completaram o tempo para graduar:\n\n${novosProntos.join('\n')}`);
@@ -344,6 +354,48 @@ function pagar(t, id) {
 }
 
 // ================= início =================
+// ---------- e-mail automático ----------
+const CHAVE_FILA = 'karate-fila-email';
+function filaEmail() { try { return JSON.parse(localStorage.getItem(CHAVE_FILA)) || []; } catch { return []; } }
+function gravarFila(f) { localStorage.setItem(CHAVE_FILA, JSON.stringify(f)); }
+function salvarEmail() {
+  D.email = { url: $('#emUrl').value.trim(), para: $('#emPara').value.trim(), codigo: $('#emCod').value.trim() };
+  salvar(); toast('Configuração de e-mail salva');
+}
+async function postarEmail(item) {
+  const r = await fetch(D.email.url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ ...item, para: D.email.para, codigo: D.email.codigo }) });
+  const j = await r.json();
+  if (!j.ok) throw new Error(j.erro || 'falhou');
+}
+function enfileirarEmail(item) { const f = filaEmail(); f.push(item); gravarFila(f); enviarFila(true); }
+let enviando = false;
+async function enviarFila(avisar) {
+  if (enviando || !D.email?.url) return;
+  let f = filaEmail(); if (!f.length) return;
+  enviando = true;
+  let ok = 0, erro = '';
+  while (f.length) {
+    try { await postarEmail(f[0]); f.shift(); gravarFila(f); ok++; }
+    catch (e) { erro = navigator.onLine ? e.message : 'sem internet'; break; }
+  }
+  enviando = false;
+  if (ok) toast(`📧 ${ok} lista(s) de presença enviada(s) por e-mail`);
+  else if (avisar) toast(`📧 Não enviou agora (${erro}). Vai tentar de novo sozinho.`, 4000);
+}
+async function testarEmail() {
+  salvarEmail();
+  if (!D.email.url) return toast('Cole o link do script primeiro');
+  $('#emStatus').textContent = 'Enviando teste…';
+  try {
+    await postarEmail({ turma: 'TESTE', data: dataBR(hoje()), alunos: [{ nome: 'Aluno de teste', faixa: 'Azul clara', presente: true }] });
+    $('#emStatus').textContent = '✔ Teste enviado! Confira a caixa de entrada.';
+  } catch (e) { $('#emStatus').textContent = '✖ Falhou: ' + (navigator.onLine ? e.message : 'sem internet'); }
+}
+window.addEventListener('online', () => enviarFila(false));
+setInterval(() => enviarFila(false), 5 * 60 * 1000);
+
 render();
+enviarFila(false);
 (() => { const n = pendentes('infantil'); if (n) setTimeout(() => toast(`⚠ ${n} mensalidade(s) pendente(s) na Turma Infantil`, 4000), 600); })();
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});

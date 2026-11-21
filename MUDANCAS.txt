@@ -1,3 +1,8 @@
+v1.2 – 20/11/2026
+- Envio automático da lista de presença (PDF) por e-mail ao finalizar a chamada, via Google Apps Script (pasta email/).
+- Sem internet, a lista fica na fila e é enviada quando a conexão voltar.
+- Configuração em Frequência → ⚙ Faixas e horas → Envio automático por e-mail.
+
 v1.1 – 20/11/2026
 - Fundos trocados pelas versões verticais (9:16) sem botões.
 - Botões da tela inicial no alto, para não cobrir o karateca; títulos dos menus com fundo escuro para leitura.

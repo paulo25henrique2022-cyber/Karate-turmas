@@ -1,4 +1,4 @@
-APP KARATÊ – TURMAS  (v1.1 – 20/11/2026)
+APP KARATÊ – TURMAS  (v1.2 – 20/11/2026)
 =======================================
 App web instalável (PWA). Funciona em Android e iPhone, sem internet.
 Os dados (alunos, horas, pagamentos) ficam salvos SÓ no celular de quem usa.
@@ -21,3 +21,14 @@ ATUALIZAR O APP
 
 BACKUP DOS DADOS
  Frequência → ⚙ Faixas e horas → "Fazer cópia" (gera um arquivo para guardar no WhatsApp/Drive).
+
+E-MAIL AUTOMÁTICO (configurar uma vez, na conta Google do professor)
+ 1. Abra script.google.com → Novo projeto.
+ 2. Apague o que estiver lá e cole todo o conteúdo de email/Codigo.gs.
+ 3. Troque TROQUE-ESTA-SENHA por uma senha sua. Salve (ícone de disquete).
+ 4. No menu de funções escolha "autorizar" → Executar → permita o acesso ao Gmail.
+ 5. Implantar → Nova implantação → tipo "App da Web".
+    Executar como: Eu  |  Quem pode acessar: Qualquer pessoa  → Implantar.
+ 6. Copie o "URL do app da Web" (termina em /exec).
+ 7. No app: Frequência → ⚙ Faixas e horas → Envio automático por e-mail:
+    cole o link, o e-mail de destino e a mesma senha → Salvar e-mail → Testar envio.
