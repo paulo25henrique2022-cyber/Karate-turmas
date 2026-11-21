@@ -1,3 +1,6 @@
+v1.5.1 – 20/11/2026
+- Se o site do GitHub sair do ar, o app instalado continua abrindo com a cópia guardada no celular.
+
 v1.5 – 20/11/2026
 - Avisos no novo modelo oficial: dojô com o tigre embaixo, moldura dourada, emblema da Athletic Center e Sensei Adriano (img/aviso-fundo.jpg).
 - Fontes novas embutidas no app (pasta fontes/): Anton no título dourado inclinado e Montserrat nos textos. Funcionam sem internet.

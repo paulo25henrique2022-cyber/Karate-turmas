@@ -1,4 +1,4 @@
-APP KARATÊ – TURMAS  (v1.5 – 20/11/2026)
+APP KARATÊ – TURMAS  (v1.5.1 – 20/11/2026)
 =======================================
 App web instalável (PWA). Funciona em Android e iPhone, sem internet.
 Os dados (alunos, horas, pagamentos) ficam salvos SÓ no celular de quem usa.
