@@ -1,3 +1,22 @@
+v1.5 – 20/11/2026
+- Avisos no novo modelo oficial: dojô com o tigre embaixo, moldura dourada, emblema da Athletic Center e Sensei Adriano (img/aviso-fundo.jpg).
+- Fontes novas embutidas no app (pasta fontes/): Anton no título dourado inclinado e Montserrat nos textos. Funcionam sem internet.
+- Campo novo "Destaque" (faixa vermelha, ex.: VAGAS LIMITADAS!).
+- Modelo Curso removido; ficaram Data de prova, Convocação e Pagamento.
+
+v1.4 – 20/11/2026
+- Avisos: emblema da Academia Athletic Center no topo (img/logo-athletic.png).
+- Avisos: logo "Sensei Adriano" sempre no rodapé, em todos os modelos (img/logo-sensei.jpg).
+- Avisos: novo botão "Gerar PDF e compartilhar no WhatsApp" (mantido também o envio como imagem).
+
+v1.3 – 20/11/2026
+- Chamada: data e hora no topo, seguem o celular automaticamente e podem ser editadas antes da chamada.
+- Chamada: depois de finalizar, aparece no fim da página o PDF daquela chamada, com:
+  Compartilhar (WhatsApp) e Enviar para o Gmail (campo de e-mail ali mesmo).
+- Envio direto pelo script do Google virou opcional (⚙ no fim da chamada); sem ele, o botão abre o Gmail com o PDF.
+- O app guarda só a última chamada de cada turma (para gerar o PDF); nada se acumula.
+- Frequência: ficou só com alunos, faixas e horas. Cópia de segurança foi para a tela inicial.
+
 v1.2 – 20/11/2026
 - Envio automático da lista de presença (PDF) por e-mail ao finalizar a chamada, via Google Apps Script (pasta email/).
 - Sem internet, a lista fica na fila e é enviada quando a conexão voltar.

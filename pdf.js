@@ -49,3 +49,23 @@ class MiniPDF {
     return new Blob([bytes], { type: 'application/pdf' });
   }
 }
+
+// PDF de uma página com uma imagem JPEG ocupando a página inteira (usado nos avisos).
+function pdfDeImagemJPEG(bytes, w, h) {
+  const pw = 595.3, ph = pw * h / w; // largura A4, altura proporcional à imagem
+  const conteudo = `q ${pw.toFixed(1)} 0 0 ${ph.toFixed(1)} 0 0 cm /Im1 Do Q`;
+  const cab = s => new TextEncoder().encode(s);
+  const partes = [], pos = [];
+  let tam = 0;
+  const push = p => { partes.push(p); tam += p.length; };
+  push(cab('%PDF-1.4\n'));
+  const obj = (n, antes, bin, depois) => { pos[n] = tam; push(cab(`${n} 0 obj\n${antes}`)); if (bin) push(bin); push(cab(`${depois || ''}\nendobj\n`)); };
+  obj(1, '<< /Type /Catalog /Pages 2 0 R >>');
+  obj(2, '<< /Type /Pages /Kids [3 0 R] /Count 1 >>');
+  obj(3, `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pw.toFixed(1)} ${ph.toFixed(1)}] /Resources << /XObject << /Im1 4 0 R >> >> /Contents 5 0 R >>`);
+  obj(4, `<< /Type /XObject /Subtype /Image /Width ${w} /Height ${h} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${bytes.length} >>\nstream\n`, bytes, '\nendstream');
+  obj(5, `<< /Length ${conteudo.length} >>\nstream\n${conteudo}\nendstream`);
+  const xref = tam;
+  push(cab(`xref\n0 6\n0000000000 65535 f \n${[1, 2, 3, 4, 5].map(i => String(pos[i]).padStart(10, '0') + ' 00000 n \n').join('')}trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`));
+  return new Blob(partes, { type: 'application/pdf' });
+}

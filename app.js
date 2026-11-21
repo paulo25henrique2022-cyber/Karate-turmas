@@ -23,6 +23,7 @@ const hoje = () => { const d = new Date(); return `${d.getFullYear()}-${String(d
 const dataBR = iso => iso ? iso.split('-').reverse().join('/') : '';
 const diasDesde = iso => Math.floor((new Date(hoje() + 'T12:00') - new Date(iso + 'T12:00')) / 864e5);
 const fmtH = h => { const t = Math.round(h * 60), hh = Math.floor(t / 60), mm = t % 60; return mm ? `${hh}h${String(mm).padStart(2, '0')}` : `${hh}h`; };
+// (chamada: ch é zerado ao sair da tela)
 const novoId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 const corFaixa = i => FAIXAS[i] ? FAIXAS[i][1] : '#888';
 const nomeFaixa = i => FAIXAS[i] ? FAIXAS[i][0] : '?';
@@ -51,6 +52,7 @@ window.addEventListener('hashchange', render);
 function render() {
   const [tela, turma] = location.hash.slice(1).split('/');
   const app = $('#app'); fecharModal();
+  if (tela !== 'chamada') ch = { data: '', hora: '' };
   const T = TURMAS[turma] ? turma : null;
   if (tela === 'menu' && T) return telaMenu(app, T);
   if (tela === 'freq' && T) return telaFreq(app, T);
@@ -68,6 +70,7 @@ function telaInicio(app) {
     <div class="titulo">空手道</div>
     <button class="placa" onclick="ir('menu/juvenil')"><span class="tigre"></span>Turma Juvenil<span class="tigre"></span></button>
     <button class="placa" onclick="ir('menu/infantil')"><span class="tigre"></span>Turma Infantil<span class="tigre"></span></button>
+    <div style="margin-top:auto;text-align:center"><button class="btn" style="background:rgba(0,0,0,.55)" onclick="abrirBackup()">💾 Cópia de segurança</button></div>
   </div></div>`;
 }
 
@@ -147,21 +150,17 @@ function editarFaixas() {
     <label class="campo" style="margin-top:12px">Duração de cada aula (horas)<input id="fxAula" type="number" min="0.25" step="0.25" inputmode="decimal" value="${D.aulaHoras}"></label>
     <p class="pq">Referência: 3 aulas de 1h30 por semana durante 6 meses ≈ 117 h.</p>
     <div class="linha"><button class="btn verde grow" onclick="salvarFaixas()">Salvar</button><button class="btn" onclick="fecharModal()">Cancelar</button></div>
-    <h2 style="margin-top:22px">📧 Envio automático por e-mail</h2>
-    <p class="pq">Ao finalizar a chamada, a lista em PDF é enviada sozinha para o e-mail abaixo. Sem internet, ela fica guardada e sai quando a conexão voltar.</p>
-    <label class="campo">Link do script (Apps Script)<input id="emUrl" value="${esc(D.email?.url)}" placeholder="https://script.google.com/macros/s/.../exec"></label>
-    <label class="campo">Enviar para (pode pôr mais de um, separados por vírgula)<input id="emPara" type="email" multiple value="${esc(D.email?.para)}" placeholder="professor@gmail.com"></label>
-    <label class="campo">Código secreto (o mesmo do script)<input id="emCod" value="${esc(D.email?.codigo)}"></label>
-    <div class="linha"><button class="btn verde grow" onclick="salvarEmail()">Salvar e-mail</button><button class="btn" onclick="testarEmail()">Testar envio</button></div>
-    <p class="pq" id="emStatus">${filaEmail().length ? `⏳ ${filaEmail().length} lista(s) aguardando internet para envio.` : ''}</p>
-    <h2 style="margin-top:22px">Cópia de segurança</h2>
-    <p class="pq">Os dados ficam só neste celular. Faça uma cópia de vez em quando e guarde no WhatsApp ou no Drive.</p>
-    <div class="linha"><button class="btn grow" onclick="backup()">💾 Fazer cópia</button><label class="btn grow" style="text-align:center">📂 Restaurar<input type="file" accept=".json,application/json" hidden onchange="restaurar(this.files[0])"></label></div>`);
+`);
 }
 function salvarFaixas() {
   D.faixas.forEach((f, i) => f.horas = Math.max(0, parseFloat(String($('#fx' + i).value).replace(',', '.')) || 0));
   D.aulaHoras = Math.max(0.25, parseFloat(String($('#fxAula').value).replace(',', '.')) || 1.5);
   salvar(); render(); toast('Faixas atualizadas');
+}
+function abrirBackup() {
+  abrirModal(`<h2>Cópia de segurança</h2><p class="pq">Os dados ficam só neste celular. Faça uma cópia de vez em quando e guarde no WhatsApp ou no Drive.</p>
+    <div class="linha"><button class="btn grow" onclick="backup()">💾 Fazer cópia</button><label class="btn grow" style="text-align:center">📂 Restaurar<input type="file" accept=".json,application/json" hidden onchange="restaurar(this.files[0])"></label></div>
+    <button class="btn cheio" style="margin-top:12px" onclick="fecharModal()">Fechar</button>`);
 }
 async function backup() {
   const f = new File([JSON.stringify(D)], `karate-backup-${hoje()}.json`, { type: 'application/json' });
@@ -179,11 +178,19 @@ function restaurar(arq) {
 
 // ---------- chamada ----------
 let marcas = {};
+let ch = { data: '', hora: '' }; // data/hora da chamada (seguem o celular, mas podem ser editadas)
+const agoraHora = () => { const d = new Date(); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
 function telaChamada(app, t) {
+  if (!ch.data) { ch.data = hoje(); ch.hora = agoraHora(); }
   const alunos = [...D.turmas[t].alunos].sort((a, b) => a.nome.localeCompare(b.nome));
-  const feita = D.turmas[t].ultimaChamada === hoje();
-  let html = `<div class="tela fundo-escuro" style="background-image:url(img/dojo.jpg)">${topo('Chamada', `${TURMAS[t]} · ${dataBR(hoje())}`, 'menu/' + t)}`;
-  if (feita) html += `<div class="aviso-topo">✔ A chamada de hoje já foi finalizada. Se fizer de novo, as horas serão somadas outra vez.</div>`;
+  const ult = D.turmas[t].ultima;
+  const feita = ult && ult.data === ch.data;
+  let html = `<div class="tela fundo-escuro" style="background-image:url(img/dojo.jpg)">${topo('Chamada', TURMAS[t], 'menu/' + t)}
+    <div class="card"><div class="linha">
+      <label class="campo grow" style="margin:0">Data da chamada<input type="date" value="${ch.data}" onchange="ch.data=this.value||hoje();render()"></label>
+      <label class="campo" style="margin:0;width:120px">Hora<input type="time" value="${ch.hora}" onchange="ch.hora=this.value"></label></div>
+      <div class="pq" style="margin-top:6px">Puxa a data e a hora do celular. Altere se a chamada for de outro dia ou horário.</div></div>`;
+  if (feita) html += `<div class="aviso-topo">✔ A chamada de ${dataBR(ch.data)} já foi finalizada (veja no fim da página). Se fizer de novo, as horas serão somadas outra vez.</div>`;
   if (!alunos.length) html += `<div class="card vazio">Nenhum aluno na turma.<br>Cadastre os alunos em <b>Frequência</b> e eles aparecem aqui automaticamente.</div>`;
   else {
     html += `<div class="linha" style="margin-bottom:10px"><button class="btn grow" onclick="todos('${t}','p')">Todos presentes</button><button class="btn grow" onclick="todos('${t}','')">Limpar</button></div>`;
@@ -194,17 +201,34 @@ function telaChamada(app, t) {
     });
     const p = alunos.filter(a => marcas[a.id] === 'p').length, f = alunos.filter(a => marcas[a.id] === 'a').length;
     html += `<p class="pq" style="text-align:center">Presentes: <b>${p}</b> · Faltas: <b>${f}</b> · Sem marcar: <b>${alunos.length - p - f}</b></p>
-      <button class="btn verde cheio" onclick="finalizar('${t}')">✔ Finalizar e gerar PDF</button>`;
+      <button class="btn verde cheio" onclick="finalizar('${t}')">✔ Finalizar chamada</button>`;
+  }
+  if (feita) {
+    const pres = ult.alunos.filter(a => a.presente).length;
+    const fila = filaEmail().length;
+    html += `<div class="card" style="margin-top:18px;border-color:var(--ouro)">
+      <h2 style="margin:0 0 4px;color:var(--ouro);font-size:19px">📄 Chamada de ${dataBR(ult.data)} às ${ult.hora.replace(':', 'h')}</h2>
+      <div class="pq" style="margin-bottom:12px">${ult.alunos.length} alunos · ${pres} presentes · ${ult.alunos.length - pres} faltas</div>
+      <button class="btn cheio" style="margin-bottom:10px" onclick="compartilharPDF('${t}')">📤 Compartilhar PDF (WhatsApp)</button>
+      <label class="campo">Enviar para o e-mail<input id="emPara" type="email" multiple value="${esc(D.email?.para)}" placeholder="professor@gmail.com"></label>
+      <button class="btn verm cheio" onclick="enviarGmail('${t}')">📧 Enviar PDF para o Gmail</button>
+      ${fila ? `<p class="pq">⏳ ${fila} envio(s) aguardando internet — saem sozinhos quando a conexão voltar.</p>` : ''}
+      <details style="margin-top:12px"><summary class="pq">⚙ Configurar envio direto (sem abrir o Gmail)</summary>
+        <p class="pq">Com o script do Google configurado, o PDF vai direto para o e-mail, sem precisar escolher nada. Sem ele, o botão abre o Gmail com o PDF anexado.</p>
+        <label class="campo">Link do script (Apps Script)<input id="emUrl" value="${esc(D.email?.url)}" placeholder="https://script.google.com/macros/s/.../exec"></label>
+        <label class="campo">Código secreto (o mesmo do script)<input id="emCod" value="${esc(D.email?.codigo)}"></label>
+        <div class="linha"><button class="btn verde grow" onclick="salvarEmail()">Salvar</button><button class="btn" onclick="testarEmail()">Testar envio</button></div>
+        <p class="pq" id="emStatus"></p></details></div>`;
   }
   app.innerHTML = html + '</div>';
 }
 function marcar(id, v) { marcas[id] = marcas[id] === v ? '' : v; const y = $('.tela').scrollTop; render(); $('.tela').scrollTop = y; }
 function todos(t, v) { D.turmas[t].alunos.forEach(a => marcas[a.id] = v); render(); }
-async function finalizar(t) {
+function finalizar(t) {
   const alunos = [...D.turmas[t].alunos].sort((a, b) => a.nome.localeCompare(b.nome));
   const sem = alunos.filter(a => !marcas[a.id]);
   if (sem.length && !confirm(`${sem.length} aluno(s) sem marcação serão registrados como FALTA. Continuar?`)) return;
-  if (D.turmas[t].ultimaChamada === hoje() && !confirm('A chamada de hoje já foi feita. Somar as horas de novo?')) return;
+  if (D.turmas[t].ultima?.data === ch.data && !confirm(`A chamada de ${dataBR(ch.data)} já foi feita. Somar as horas de novo?`)) return;
   const novosProntos = [];
   alunos.forEach(a => {
     if (marcas[a.id] === 'p') {
@@ -213,35 +237,51 @@ async function finalizar(t) {
       if (!antes && situacao(a).pronto) novosProntos.push(a.nome);
     }
   });
-  D.turmas[t].ultimaChamada = hoje(); salvar();
-  if (D.email?.url) {
-    enfileirarEmail({ turma: TURMAS[t], data: dataBR(hoje()), alunos: alunos.map(a => ({ nome: a.nome, faixa: nomeFaixa(a.faixa), presente: marcas[a.id] === 'p' })) });
-  }
-  const pdf = pdfChamada(t, alunos);
-  marcas = {}; render();
+  // guarda só a ÚLTIMA chamada (para gerar o PDF); a anterior é apagada
+  D.turmas[t].ultima = { data: ch.data, hora: ch.hora, alunos: alunos.map(a => ({ nome: a.nome, faixa: nomeFaixa(a.faixa), presente: marcas[a.id] === 'p' })) };
+  D.turmas[t].ultimaChamada = ch.data;
+  salvar(); marcas = {}; render();
+  setTimeout(() => { const tl = $('.tela'); tl.scrollTo({ top: tl.scrollHeight, behavior: 'smooth' }); }, 50);
   if (novosProntos.length) alert(`🥋 Completaram o tempo para graduar:\n\n${novosProntos.join('\n')}`);
-  await compartilharArquivo(new File([pdf], `Chamada ${TURMAS[t]} ${dataBR(hoje()).replace(/\//g, '-')}.pdf`, { type: 'application/pdf' }), `Chamada ${TURMAS[t]} – ${dataBR(hoje())}`);
+  else toast('Chamada finalizada ✔ — envie o PDF no fim da página');
 }
-function pdfChamada(t, alunos) {
+const nomePDF = (t, u) => `Chamada ${TURMAS[t]} ${dataBR(u.data).replace(/\//g, '-')}.pdf`;
+function compartilharPDF(t) {
+  const u = D.turmas[t].ultima;
+  compartilharArquivo(new File([pdfChamada(t, u)], nomePDF(t, u), { type: 'application/pdf' }), `Chamada ${TURMAS[t]} – ${dataBR(u.data)}`);
+}
+async function enviarGmail(t) {
+  const u = D.turmas[t].ultima;
+  D.email = { ...(D.email || {}), para: $('#emPara').value.trim() }; salvar();
+  if (D.email.url) {
+    if (!D.email.para) return toast('Digite o e-mail de destino');
+    enfileirarEmail({ turma: TURMAS[t], data: `${dataBR(u.data)} às ${u.hora.replace(':', 'h')}`, alunos: u.alunos });
+    return;
+  }
+  // sem script: abre o compartilhamento já com o PDF — escolha o Gmail
+  toast('Escolha o Gmail na lista que vai abrir', 3000);
+  await compartilharArquivo(new File([pdfChamada(t, u)], nomePDF(t, u), { type: 'application/pdf' }), `Lista de presença – ${TURMAS[t]} – ${dataBR(u.data)}`);
+}
+function pdfChamada(t, u) {
   const p = new MiniPDF();
   const cab = () => {
     p.retangulo(0, 0, 210, 28, [74, 42, 20]); p.retangulo(0, 28, 210, 2, [200, 32, 42]);
     p.texto(15, 13, 'LISTA DE PRESENÇA', 18, true, [242, 193, 78]);
-    p.texto(15, 22, `${TURMAS[t]}  •  ${dataBR(hoje())}`, 12, false, [255, 246, 230]);
+    p.texto(15, 22, `${TURMAS[t]}  •  ${dataBR(u.data)} às ${u.hora.replace(':', 'h')}`, 12, false, [255, 246, 230]);
     p.texto(15, 42, 'Nº', 10, true); p.texto(27, 42, 'Aluno', 10, true); p.texto(120, 42, 'Faixa', 10, true); p.texto(170, 42, 'Situação', 10, true);
   };
   cab();
   let y = 50, n = 0;
-  alunos.forEach((a, i) => {
+  u.alunos.forEach((a, i) => {
     if (y > 280) { p.novaPagina(); cab(); y = 50; }
     if (i % 2 === 0) p.retangulo(12, y - 5, 186, 7, [245, 236, 220]);
-    const pres = marcas[a.id] === 'p'; if (pres) n++;
-    p.texto(15, y, String(i + 1), 10); p.texto(27, y, a.nome.slice(0, 48), 10); p.texto(120, y, nomeFaixa(a.faixa), 10);
-    p.texto(170, y, pres ? 'Presente' : 'Falta', 10, true, pres ? [20, 120, 40] : [200, 30, 30]);
+    if (a.presente) n++;
+    p.texto(15, y, String(i + 1), 10); p.texto(27, y, a.nome.slice(0, 48), 10); p.texto(120, y, a.faixa, 10);
+    p.texto(170, y, a.presente ? 'Presente' : 'Falta', 10, true, a.presente ? [20, 120, 40] : [200, 30, 30]);
     y += 7;
   });
   y += 6; if (y > 285) { p.novaPagina(); y = 20; }
-  p.texto(15, y, `Total: ${alunos.length} alunos  •  Presentes: ${n}  •  Faltas: ${alunos.length - n}`, 11, true);
+  p.texto(15, y, `Total: ${u.alunos.length} alunos  •  Presentes: ${n}  •  Faltas: ${u.alunos.length - n}`, 11, true);
   return p.blob();
 }
 async function compartilharArquivo(file, titulo) {
@@ -257,35 +297,41 @@ async function compartilharArquivo(file, titulo) {
 
 // ---------- avisos ----------
 const MODELOS = {
-  prova: { nome: '📅 Data de prova', titulo: 'EXAME DE FAIXA', cor: '#c8202a', msg: 'Atenção, alunos! Nosso exame de graduação de faixa vai acontecer na data abaixo. Venham de kimono limpo e faixa.' },
-  convocacao: { nome: '🥋 Convocação', titulo: 'CONVOCAÇÃO PARA EXAME', cor: '#f2c14e', msg: 'Os alunos abaixo estão convocados para o exame de faixa:\n\n' },
-  curso: { nome: '🎓 Curso', titulo: 'CURSO / SEMINÁRIO', cor: '#2f9a4a', msg: 'Participe do nosso curso especial. Vagas limitadas!' },
-  pagamento: { nome: '💰 Pagamento', titulo: 'AVISO DE MENSALIDADE', cor: '#1d6fd8', msg: 'Lembramos que a mensalidade vence na data abaixo. Contamos com a sua pontualidade. Oss!' }
+  prova: { nome: '📅 Data de prova', titulo: 'Exame de Faixa', destaque: 'Não falte!', msg: 'Venham de kimono limpo e faixa amarrada.' },
+  convocacao: { nome: '🥋 Convocação', titulo: 'Convocação', destaque: 'Oss!', msg: 'Convocados para o exame de faixa:\n' },
+  pagamento: { nome: '💰 Pagamento', titulo: 'Mensalidade', destaque: 'Evite atrasos!', msg: 'Lembramos que a mensalidade vence na data abaixo.' }
 };
 let av = { modelo: 'prova' };
+// fontes do aviso (ficam dentro do app, funcionam sem internet)
+const fontesAviso = Promise.all([
+  new FontFace('Anton', 'url(fontes/Anton-Regular.ttf)').load(),
+  new FontFace('Montserrat', 'url(fontes/Montserrat.ttf)', { weight: '100 900' }).load()
+]).then(fs => { fs.forEach(f => document.fonts.add(f)); $('#preview') && desenharAviso(); }).catch(() => {});
 function telaAvisos(app, t) {
   const m = MODELOS[av.modelo];
   if (av.turma !== t || av.modeloCarregado !== av.modelo) {
-    Object.assign(av, { turma: t, modeloCarregado: av.modelo, titulo: m.titulo, msg: m.msg, data: av.data || '', hora: av.hora || '', local: av.local || '' });
-    if (av.modelo === 'convocacao') av.msg += D.turmas[t].alunos.filter(a => situacao(a).pronto).map(a => `• ${a.nome}`).join('\n');
+    Object.assign(av, { turma: t, modeloCarregado: av.modelo, titulo: m.titulo, destaque: m.destaque, msg: m.msg, data: av.data || '', hora: av.hora || '', local: av.local || 'Academia Athletic Center' });
+    if (av.modelo === 'convocacao') av.msg += D.turmas[t].alunos.filter(a => situacao(a).pronto).map(a => a.nome).join(', ');
   }
   app.innerHTML = `<div class="tela fundo-escuro" style="background-image:url(img/dojo.jpg)">${topo('Avisos', 'Crie e envie pelo WhatsApp', 'menu/' + t)}
-    <div class="modelos">${Object.entries(MODELOS).map(([k, v]) => `<button class="${k === av.modelo ? 'on' : ''}" onclick="av.modelo='${k}';render()">${v.nome}</button>`).join('')}</div>
-    <canvas id="preview" width="1080" height="1350"></canvas>
+    <div class="modelos" style="grid-template-columns:1fr 1fr 1fr">${Object.entries(MODELOS).map(([k, v]) => `<button class="${k === av.modelo ? 'on' : ''}" onclick="av.modelo='${k}';render()">${v.nome}</button>`).join('')}</div>
+    <canvas id="preview" width="1080" height="1440"></canvas>
     <div class="card">
       <label class="campo">Título<input id="avTitulo" value="${esc(av.titulo)}"></label>
       <div class="linha"><label class="campo grow">Data<input id="avData" type="date" value="${av.data}"></label><label class="campo grow">Horário<input id="avHora" type="time" value="${av.hora}"></label></div>
-      <label class="campo">Local<input id="avLocal" value="${esc(av.local)}" placeholder="Ex.: Dojô central"></label>
-      <label class="campo">Mensagem<textarea id="avMsg">${esc(av.msg)}</textarea></label>
-      <button class="btn verde cheio" onclick="enviarAviso()">📤 Compartilhar no WhatsApp</button>
+      <label class="campo">Local<input id="avLocal" value="${esc(av.local)}" placeholder="Ex.: Academia Athletic Center"></label>
+      <label class="campo">Mensagem (curta, até 3 linhas)<textarea id="avMsg">${esc(av.msg)}</textarea></label>
+      <label class="campo">Destaque (faixa vermelha)<input id="avDest" value="${esc(av.destaque)}" placeholder="Ex.: VAGAS LIMITADAS!"></label>
+      <button class="btn verm cheio" style="margin-bottom:10px" onclick="avisoPDF()">📄 Gerar PDF e compartilhar no WhatsApp</button>
+      <button class="btn verde cheio" onclick="enviarAviso()">🖼 Compartilhar como imagem</button>
     </div></div>`;
-  ['avTitulo', 'avData', 'avHora', 'avLocal', 'avMsg'].forEach(id => $('#' + id).addEventListener('input', () => {
-    av.titulo = $('#avTitulo').value; av.data = $('#avData').value; av.hora = $('#avHora').value; av.local = $('#avLocal').value; av.msg = $('#avMsg').value; desenharAviso();
+  ['avTitulo', 'avData', 'avHora', 'avLocal', 'avMsg', 'avDest'].forEach(id => $('#' + id).addEventListener('input', () => {
+    av.titulo = $('#avTitulo').value; av.data = $('#avData').value; av.hora = $('#avHora').value; av.local = $('#avLocal').value; av.msg = $('#avMsg').value; av.destaque = $('#avDest').value; desenharAviso();
   }));
   desenharAviso();
 }
-const imgDojo = new Image(); imgDojo.src = 'img/dojo.jpg'; imgDojo.onload = () => $('#preview') && desenharAviso();
-const imgTigre = new Image(); imgTigre.src = 'img/icone-512.png'; imgTigre.onload = () => $('#preview') && desenharAviso();
+const imgFundoAviso = new Image(); imgFundoAviso.src = 'img/aviso-fundo.jpg'; imgFundoAviso.onload = () => $('#preview') && desenharAviso();
+const imgTigre = new Image(); imgTigre.src = 'img/logo-athletic.png'; imgTigre.onload = () => $('#preview') && desenharAviso();
 function quebrar(ctx, texto, larg) {
   const linhas = [];
   String(texto).split('\n').forEach(par => {
@@ -295,36 +341,84 @@ function quebrar(ctx, texto, larg) {
   });
   return linhas;
 }
+// pincelada vermelha (borda irregular, mais fina nas pontas)
+function pincel(x, cx, cy, w, h, cor) {
+  x.save(); x.fillStyle = cor; x.beginPath();
+  const n = 40;
+  for (let i = 0; i <= n; i++) { const t = i / n, px = cx - w / 2 + w * t, esp = h * Math.sin(Math.PI * Math.min(1, t * 1.15)) * (0.85 + 0.15 * Math.sin(i * 2.3)); x.lineTo(px, cy - esp / 2); }
+  for (let i = n; i >= 0; i--) { const t = i / n, px = cx - w / 2 + w * t, esp = h * Math.sin(Math.PI * Math.min(1, t * 1.15)) * (0.85 + 0.15 * Math.cos(i * 1.7)); x.lineTo(px, cy + esp / 2); }
+  x.closePath(); x.fill(); x.restore();
+}
+function textoOuro(x, txt, cx, y, tam, larg) {
+  x.save(); x.font = `${tam}px Anton, Impact, sans-serif`;
+  let t = tam; while (x.measureText(txt).width > larg && t > 50) { t -= 4; x.font = `${t}px Anton, Impact, sans-serif`; }
+  x.translate(cx, y); x.transform(1, 0, -0.18, 1, 0, 0); // inclinado, estilo pincel
+  const g = x.createLinearGradient(0, -t * 0.8, 0, t * 0.1);
+  g.addColorStop(0, '#fff3b0'); g.addColorStop(0.45, '#f7c843'); g.addColorStop(1, '#c78512');
+  x.textAlign = 'center'; x.lineJoin = 'round';
+  x.shadowColor = 'rgba(0,0,0,.9)'; x.shadowBlur = 18; x.shadowOffsetY = 6;
+  x.lineWidth = 10; x.strokeStyle = '#3a1a05'; x.strokeText(txt, 0, 0);
+  x.shadowColor = 'transparent'; x.fillStyle = g; x.fillText(txt, 0, 0);
+  x.restore();
+  return t;
+}
 function desenharAviso() {
   const c = $('#preview'); if (!c) return;
-  const x = c.getContext('2d'), W = 1080, H = 1350, m = MODELOS[av.modelo];
+  const x = c.getContext('2d'), W = 1080, H = 1440;
   x.fillStyle = '#1a0d06'; x.fillRect(0, 0, W, H);
-  if (imgDojo.complete && imgDojo.naturalWidth) { const s = Math.max(W / imgDojo.width, H / imgDojo.height); x.drawImage(imgDojo, (W - imgDojo.width * s) / 2, (H - imgDojo.height * s) / 2, imgDojo.width * s, imgDojo.height * s); }
-  const g = x.createLinearGradient(0, 0, 0, H); g.addColorStop(0, 'rgba(10,5,2,.55)'); g.addColorStop(.35, 'rgba(10,5,2,.82)'); g.addColorStop(1, 'rgba(10,5,2,.92)');
-  x.fillStyle = g; x.fillRect(0, 0, W, H);
-  // moldura dourada
-  x.strokeStyle = '#b8862b'; x.lineWidth = 10; x.strokeRect(30, 30, W - 60, H - 60);
-  x.strokeStyle = '#f2c14e'; x.lineWidth = 3; x.strokeRect(48, 48, W - 96, H - 96);
+  if (imgFundoAviso.complete && imgFundoAviso.naturalWidth) x.drawImage(imgFundoAviso, 0, 0, W, H);
+  // escurece a área dos textos para ler bem
+  const g = x.createLinearGradient(0, 0, 0, 860); g.addColorStop(0, 'rgba(10,5,2,.45)'); g.addColorStop(.75, 'rgba(10,5,2,.55)'); g.addColorStop(1, 'rgba(10,5,2,0)');
+  x.fillStyle = g; x.fillRect(0, 0, W, 860);
+  // moldura dourada dupla com cantos
+  x.strokeStyle = '#c8962e'; x.lineWidth = 8; x.strokeRect(22, 22, W - 44, H - 44);
+  x.strokeStyle = '#f2c14e'; x.lineWidth = 3; x.strokeRect(40, 40, W - 80, H - 80);
+  [[22, 22, 1, 1], [W - 22, 22, -1, 1], [22, H - 22, 1, -1], [W - 22, H - 22, -1, -1]].forEach(([px, py, sx, sy]) => {
+    x.fillStyle = '#f2c14e'; x.fillRect(px - (sx < 0 ? 46 : 0), py - (sy < 0 ? 46 : 0), 46, 46);
+    x.fillStyle = '#5a3210'; x.fillRect(px + sx * 10 - (sx < 0 ? 26 : 0), py + sy * 10 - (sy < 0 ? 26 : 0), 26, 26);
+  });
+  // emblema
   if (imgTigre.complete && imgTigre.naturalWidth) {
-    x.save(); x.beginPath(); x.arc(W / 2, 175, 95, 0, Math.PI * 2); x.clip(); x.drawImage(imgTigre, W / 2 - 95, 80, 190, 190); x.restore();
-    x.beginPath(); x.arc(W / 2, 175, 95, 0, Math.PI * 2); x.strokeStyle = '#f2c14e'; x.lineWidth = 6; x.stroke();
+    x.save(); x.shadowColor = '#000'; x.shadowBlur = 25;
+    x.beginPath(); x.arc(W / 2, 175, 128, 0, Math.PI * 2); x.fillStyle = '#c8962e'; x.fill(); x.restore();
+    x.beginPath(); x.arc(W / 2, 175, 116, 0, Math.PI * 2); x.fillStyle = '#fff'; x.fill();
+    x.save(); x.beginPath(); x.arc(W / 2, 175, 112, 0, Math.PI * 2); x.clip(); x.drawImage(imgTigre, W / 2 - 112, 63, 224, 224); x.restore();
   }
-  x.textAlign = 'center'; x.fillStyle = '#f2c14e'; x.shadowColor = '#000'; x.shadowBlur = 12;
-  x.font = 'italic 900 76px system-ui,sans-serif';
-  let y = 360; quebrar(x, (av.titulo || '').toUpperCase(), W - 160).forEach(l => { x.fillText(l, W / 2, y); y += 84; });
-  x.fillStyle = m.cor; x.shadowBlur = 0; x.fillRect(W / 2 - 180, y - 40, 360, 8); y += 40;
-  x.fillStyle = '#fff6e6'; x.font = '600 42px system-ui,sans-serif';
+  // título
+  textoOuro(x, (av.titulo || '').toUpperCase(), W / 2 + 10, 420, 112, W - 170);
+  pincel(x, W / 2, 452, 760, 22, '#c8101a');
+  // data / hora / local
+  x.textAlign = 'center'; x.fillStyle = '#fff'; x.shadowColor = '#000'; x.shadowBlur = 10;
+  x.font = '600 40px Montserrat, system-ui, sans-serif';
   const info = [];
-  if (av.data) { const d = new Date(av.data + 'T12:00'); info.push('📅 ' + d.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })); }
-  if (av.hora) info.push('⏰ ' + av.hora.replace(':', 'h'));
-  if (av.local) info.push('📍 ' + av.local);
-  info.forEach(l => { y += 58; x.fillText(l, W / 2, y); });
-  y += info.length ? 80 : 40;
-  x.font = '400 38px system-ui,sans-serif'; x.fillStyle = '#f5ead6';
-  quebrar(x, av.msg || '', W - 180).forEach(l => { if (y < H - 140) { x.fillText(l, W / 2, y); y += 50; } });
-  x.font = 'italic 800 40px system-ui,sans-serif'; x.fillStyle = '#f2c14e'; x.fillText('空手道 · OSS!', W / 2, H - 90);
+  if (av.data) { const d = new Date(av.data + 'T12:00'); let s = d.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' }); info.push('📅  ' + s.charAt(0).toUpperCase() + s.slice(1)); }
+  if (av.hora) info.push('⏰  ' + av.hora.replace(':', 'h'));
+  if (av.local) info.push('📍  ' + av.local);
+  let y = 530; info.forEach(l => { x.fillText(l, W / 2, y); y += 58; });
+  // separador com torii
+  y += 4; x.shadowBlur = 0; x.strokeStyle = '#f2c14e'; x.lineWidth = 3;
+  x.beginPath(); x.moveTo(W / 2 - 280, y - 12); x.lineTo(W / 2 - 40, y - 12); x.moveTo(W / 2 + 40, y - 12); x.lineTo(W / 2 + 280, y - 12); x.stroke();
+  x.font = '38px system-ui'; x.fillText('⛩', W / 2, y); y += 56;
+  // mensagem
+  x.fillStyle = '#fff'; x.shadowColor = '#000'; x.shadowBlur = 10; x.font = '600 36px Montserrat, system-ui, sans-serif';
+  quebrar(x, av.msg || '', W - 220).slice(0, 3).forEach(l => { x.fillText(l, W / 2, y); y += 46; });
+  // destaque em faixa vermelha
+  if (av.destaque) {
+    y += 34; x.shadowBlur = 0;
+    pincel(x, W / 2, y - 22, 700, 96, 'rgba(176,10,18,.95)');
+    textoOuro(x, av.destaque.toUpperCase(), W / 2 + 6, y + 6, 66, 600);
+  }
+  x.shadowBlur = 0;
 }
-function enviarAviso() {
+async function avisoPDF() {
+  await fontesAviso; desenharAviso();
+  const c = $('#preview');
+  const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.9));
+  const pdf = pdfDeImagemJPEG(new Uint8Array(await blob.arrayBuffer()), c.width, c.height);
+  compartilharArquivo(new File([pdf], `Aviso ${MODELOS[av.modelo].titulo}.pdf`, { type: 'application/pdf' }), av.titulo);
+}
+async function enviarAviso() {
+  await fontesAviso; desenharAviso();
   $('#preview').toBlob(b => compartilharArquivo(new File([b], `Aviso ${MODELOS[av.modelo].titulo}.png`, { type: 'image/png' }), av.titulo), 'image/png');
 }
 
@@ -359,7 +453,7 @@ const CHAVE_FILA = 'karate-fila-email';
 function filaEmail() { try { return JSON.parse(localStorage.getItem(CHAVE_FILA)) || []; } catch { return []; } }
 function gravarFila(f) { localStorage.setItem(CHAVE_FILA, JSON.stringify(f)); }
 function salvarEmail() {
-  D.email = { url: $('#emUrl').value.trim(), para: $('#emPara').value.trim(), codigo: $('#emCod').value.trim() };
+  D.email = { ...(D.email || {}), url: $('#emUrl').value.trim(), codigo: $('#emCod').value.trim(), para: $('#emPara') ? $('#emPara').value.trim() : D.email?.para };
   salvar(); toast('Configuração de e-mail salva');
 }
 async function postarEmail(item) {
@@ -386,6 +480,7 @@ async function enviarFila(avisar) {
 async function testarEmail() {
   salvarEmail();
   if (!D.email.url) return toast('Cole o link do script primeiro');
+  if (!D.email.para) return toast('Digite o e-mail de destino');
   $('#emStatus').textContent = 'Enviando teste…';
   try {
     await postarEmail({ turma: 'TESTE', data: dataBR(hoje()), alunos: [{ nome: 'Aluno de teste', faixa: 'Azul clara', presente: true }] });

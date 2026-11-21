@@ -1,7 +1,7 @@
 // Guarda os arquivos do app para funcionar sem internet.
-const VERSAO = 'karate-v1.2';
+const VERSAO = 'karate-v1.5';
 const ARQS = ['./', 'index.html', 'style.css', 'app.js', 'pdf.js', 'manifest.json',
-  'img/inicio.jpg', 'img/juvenil.jpg', 'img/infantil.jpg', 'img/dojo.jpg', 'img/icone-192.png', 'img/icone-512.png', 'img/apple-icon.png'];
+  'img/inicio.jpg', 'img/juvenil.jpg', 'img/infantil.jpg', 'img/dojo.jpg', 'img/icone-192.png', 'img/icone-512.png', 'img/apple-icon.png', 'img/logo-athletic.png', 'img/logo-sensei.jpg', 'img/aviso-fundo.jpg', 'fontes/Anton-Regular.ttf', 'fontes/Montserrat.ttf'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(VERSAO).then(c => c.addAll(ARQS))); self.skipWaiting(); });
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== VERSAO).map(k => caches.delete(k)))));
