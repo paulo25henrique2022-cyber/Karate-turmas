@@ -1,0 +1,23 @@
+APP KARATÊ – TURMAS  (v1.1 – 20/11/2026)
+=======================================
+App web instalável (PWA). Funciona em Android e iPhone, sem internet.
+Os dados (alunos, horas, pagamentos) ficam salvos SÓ no celular de quem usa.
+
+ARQUIVOS
+ index.html, style.css, app.js (lógica), pdf.js (gera o PDF da chamada),
+ sw.js (modo sem internet), manifest.json (instalação), img/ (fundos e ícone)
+
+PUBLICAR NO GITHUB PAGES
+ 1. github.com → New repository → nome: karate-turmas → Public → Create.
+ 2. "uploading an existing file" → arraste TODOS os arquivos e a pasta img → Commit.
+ 3. Settings → Pages → Branch: main, pasta / (root) → Save.
+ 4. Em 1–2 min o link aparece: https://SEU-USUARIO.github.io/karate-turmas/
+ 5. No celular do professor, abra o link:
+    - Android (Chrome): menu ⋮ → "Adicionar à tela inicial" / "Instalar app"
+    - iPhone (Safari): botão Compartilhar → "Adicionar à Tela de Início"
+
+ATUALIZAR O APP
+ Envie os arquivos novos para o mesmo repositório. Os dados do professor NÃO se perdem.
+
+BACKUP DOS DADOS
+ Frequência → ⚙ Faixas e horas → "Fazer cópia" (gera um arquivo para guardar no WhatsApp/Drive).
