@@ -1,3 +1,9 @@
+v1.6
+- Faixas e horas separadas por turma: Infantil e Juvenil têm a própria lista de faixas, horas e duração da aula.
+- Faixa Branca adicionada no início das duas turmas (alunos já cadastrados continuam na mesma faixa).
+- Editor de faixas: mudar nome e cor, adicionar faixa nova, mudar a ordem (↑ ↓) e apagar faixa sem alunos.
+- Cópias de segurança antigas continuam podendo ser restauradas (são convertidas automaticamente).
+
 v1.5.1 – 20/11/2026
 - Se o site do GitHub sair do ar, o app instalado continua abrindo com a cópia guardada no celular.
 

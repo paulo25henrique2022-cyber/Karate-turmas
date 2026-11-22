@@ -15,6 +15,22 @@ function padrao() {
 }
 let D;
 try { D = JSON.parse(localStorage.getItem(CHAVE)) || padrao(); } catch { D = padrao(); }
+// v1.6: faixas e duração da aula separadas por turma, com a faixa Branca no início
+function migrar(d) {
+  if (d.v >= 2) return d;
+  for (const t of Object.keys(TURMAS)) {
+    const tu = d.turmas[t] = d.turmas[t] || { alunos: [], ultimaChamada: '' };
+    if (!tu.faixas) {
+      tu.faixas = [{ nome: 'Branca', cor: '#f2f2f2', horas: 117 }, ...FAIXAS.map(([nome, cor], i) => ({ nome, cor, horas: d.faixas?.[i]?.horas ?? 117 }))];
+      tu.aulaHoras = d.aulaHoras || 1.5;
+      tu.alunos.forEach(a => { a.faixa = (+a.faixa || 0) + 1; });
+    }
+  }
+  d.v = 2; return d;
+}
+D = migrar(D); salvar();
+const FX = t => D.turmas[t].faixas;
+const aulaH = t => D.turmas[t].aulaHoras || 1.5;
 function salvar() { localStorage.setItem(CHAVE, JSON.stringify(D)); }
 
 const $ = s => document.querySelector(s);
@@ -25,18 +41,18 @@ const diasDesde = iso => Math.floor((new Date(hoje() + 'T12:00') - new Date(iso 
 const fmtH = h => { const t = Math.round(h * 60), hh = Math.floor(t / 60), mm = t % 60; return mm ? `${hh}h${String(mm).padStart(2, '0')}` : `${hh}h`; };
 // (chamada: ch é zerado ao sair da tela)
 const novoId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-const corFaixa = i => FAIXAS[i] ? FAIXAS[i][1] : '#888';
-const nomeFaixa = i => FAIXAS[i] ? FAIXAS[i][0] : '?';
+const corFaixa = (t, i) => FX(t)[i]?.cor || '#888';
+const nomeFaixa = (t, i) => FX(t)[i]?.nome || '?';
 
 function toast(msg, ms = 2600) { const t = $('#toast'); t.textContent = msg; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => t.hidden = true, ms); }
 function abrirModal(html) { $('#modalCaixa').innerHTML = html; $('#modal').hidden = false; }
 function fecharModal() { $('#modal').hidden = true; }
 $('#modal').addEventListener('click', e => { if (e.target.id === 'modal') fecharModal(); });
 
-function situacao(a) {
-  const precisa = D.faixas[a.faixa]?.horas ?? 117;
+function situacao(a, t) {
+  const precisa = FX(t)[a.faixa]?.horas ?? 117;
   const falta = Math.max(0, precisa - a.horas);
-  return { precisa, falta, aulas: Math.ceil(falta / D.aulaHoras), pronto: a.horas >= precisa && a.faixa < FAIXAS.length - 1, pct: Math.min(100, a.horas / precisa * 100) };
+  return { precisa, falta, aulas: Math.ceil(falta / aulaH(t)), pronto: a.horas >= precisa && a.faixa < FX(t).length - 1, pct: Math.min(100, precisa ? a.horas / precisa * 100 : 100) };
 }
 function mensal(a) {
   if (!a.pago) return { st: 'nunca', txt: 'Nenhum pagamento registrado', dias: 0 };
@@ -76,7 +92,7 @@ function telaInicio(app) {
 
 // ---------- menus ----------
 function telaMenu(app, t) {
-  const prontos = D.turmas[t].alunos.filter(a => situacao(a).pronto).length;
+  const prontos = D.turmas[t].alunos.filter(a => situacao(a, t).pronto).length;
   const pend = t === 'infantil' ? pendentes(t) : 0;
   app.innerHTML = `<div class="tela" style="background-image:url(img/${t}.jpg)">
     ${topo(TURMAS[t], 'Escolha uma opção', 'inicio')}
@@ -91,21 +107,21 @@ function telaMenu(app, t) {
 // ---------- frequência ----------
 function telaFreq(app, t) {
   const alunos = D.turmas[t].alunos;
-  const prontos = alunos.filter(a => situacao(a).pronto);
+  const prontos = alunos.filter(a => situacao(a, t).pronto);
   let html = `<div class="tela fundo-escuro" style="background-image:url(img/dojo.jpg)">${topo('Frequência', TURMAS[t], 'menu/' + t)}
-    <div class="linha" style="margin-bottom:12px"><button class="btn grow" onclick="editarAluno('${t}')">+ Aluno</button><button class="btn" onclick="editarFaixas()">⚙ Faixas e horas</button></div>`;
+    <div class="linha" style="margin-bottom:12px"><button class="btn grow" onclick="editarAluno('${t}')">+ Aluno</button><button class="btn" onclick="editarFaixas('${t}')">⚙ Faixas e horas</button></div>`;
   if (prontos.length) html += `<div class="aviso-topo">🥋 <b>${prontos.length} aluno(s) já completaram o tempo para graduar:</b> ${prontos.map(a => esc(a.nome)).join(', ')}</div>`;
   if (!alunos.length) html += `<div class="card vazio">Nenhum aluno cadastrado.<br>Toque em <b>+ Aluno</b>. Os alunos cadastrados aqui entram automaticamente na chamada.</div>`;
-  FAIXAS.forEach(([nome, cor], fi) => {
+  FX(t).forEach(({ nome, cor, horas }, fi) => {
     const lista = alunos.filter(a => a.faixa === fi).sort((a, b) => a.nome.localeCompare(b.nome));
     if (!lista.length) return;
-    html += `<div class="grupo"><span class="faixa" style="background:${cor}"></span>${nome} <span class="pq">(${lista.length}) — exige ${fmtH(D.faixas[fi].horas)}</span></div>`;
+    html += `<div class="grupo"><span class="faixa" style="background:${cor}"></span>${nome} <span class="pq">(${lista.length}) — exige ${fmtH(horas)}</span></div>`;
     lista.forEach(a => {
-      const s = situacao(a);
+      const s = situacao(a, t);
       html += `<div class="card ${s.pronto ? 'pronto' : ''}" onclick="editarAluno('${t}','${a.id}')">
         <div class="linha"><span class="nome grow">${esc(a.nome)}</span>${s.pronto ? '<span class="tag ok">PODE GRADUAR</span>' : ''}</div>
         <div class="barra"><b style="width:${s.pct}%"></b></div>
-        <div class="pq">${fmtH(a.horas)} de ${fmtH(s.precisa)} · ${s.pronto ? 'tempo completo ✔' : fi === FAIXAS.length - 1 && a.horas >= s.precisa ? 'última faixa da lista' : `faltam ${fmtH(s.falta)} (≈ ${s.aulas} aula${s.aulas === 1 ? '' : 's'})`}</div></div>`;
+        <div class="pq">${fmtH(a.horas)} de ${fmtH(s.precisa)} · ${s.pronto ? 'tempo completo ✔' : fi === FX(t).length - 1 && a.horas >= s.precisa ? 'última faixa da lista' : `faltam ${fmtH(s.falta)} (≈ ${s.aulas} aula${s.aulas === 1 ? '' : 's'})`}</div></div>`;
     });
   });
   app.innerHTML = html + '</div>';
@@ -115,12 +131,12 @@ function editarAluno(t, id) {
   const a = id ? D.turmas[t].alunos.find(x => x.id === id) : null;
   abrirModal(`<h2>${a ? 'Editar aluno' : 'Novo aluno'}</h2>
     <label class="campo">Nome<input id="fNome" value="${esc(a?.nome)}" placeholder="Nome do aluno"></label>
-    <label class="campo">Faixa atual<select id="fFaixa">${FAIXAS.map(([n], i) => `<option value="${i}" ${a?.faixa === i ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
+    <label class="campo">Faixa atual<select id="fFaixa">${FX(t).map(({ nome: n }, i) => `<option value="${i}" ${a?.faixa === i ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select></label>
     <label class="campo">Horas de treino já feitas nesta faixa (pode ajustar à mão)<input id="fHoras" type="number" step="0.5" min="0" inputmode="decimal" value="${a ? a.horas : 0}"></label>
     ${t === 'infantil' ? `<label class="campo">Último pagamento da mensalidade<input id="fPago" type="date" value="${a?.pago || ''}"></label>` : ''}
     <div class="linha" style="margin-top:6px"><button class="btn verde grow" onclick="salvarAluno('${t}','${id || ''}')">Salvar</button><button class="btn" onclick="fecharModal()">Cancelar</button></div>
     ${a ? `<div class="linha" style="margin-top:14px">
-      ${a.faixa < FAIXAS.length - 1 ? `<button class="btn grow" onclick="graduar('${t}','${a.id}')">🥋 Graduar para ${nomeFaixa(a.faixa + 1)}</button>` : ''}
+      ${a.faixa < FX(t).length - 1 ? `<button class="btn grow" onclick="graduar('${t}','${a.id}')">🥋 Graduar para ${esc(nomeFaixa(t, a.faixa + 1))}</button>` : ''}
       <button class="btn verm" onclick="excluirAluno('${t}','${a.id}')">Excluir</button></div>` : ''}`);
   if (!a) setTimeout(() => $('#fNome').focus(), 50);
 }
@@ -136,7 +152,7 @@ function salvarAluno(t, id) {
 }
 function graduar(t, id) {
   const a = D.turmas[t].alunos.find(x => x.id === id);
-  if (!confirm(`Graduar ${a.nome} para a faixa ${nomeFaixa(a.faixa + 1)}? As horas voltam para zero.`)) return;
+  if (!confirm(`Graduar ${a.nome} para a faixa ${nomeFaixa(t, a.faixa + 1)}? As horas voltam para zero.`)) return;
   a.faixa++; a.horas = 0; salvar(); render(); toast(`Parabéns, ${a.nome}! 🥋`);
 }
 function excluirAluno(t, id) {
@@ -144,18 +160,44 @@ function excluirAluno(t, id) {
   if (!confirm(`Excluir ${a.nome}? Isso não pode ser desfeito.`)) return;
   D.turmas[t].alunos = D.turmas[t].alunos.filter(x => x.id !== id); salvar(); render();
 }
-function editarFaixas() {
-  abrirModal(`<h2>Faixas e horas</h2><p class="pq">Horas de treino que o aluno precisa cumprir <b>em cada faixa</b> para poder graduar para a próxima.</p>
-    <div class="faixas-ed">${D.faixas.map((f, i) => `<div class="linha"><span class="faixa" style="background:${corFaixa(i)}"></span><span class="grow">${f.nome}</span><input id="fx${i}" type="number" min="0" step="0.5" inputmode="decimal" value="${f.horas}"> h</div>`).join('')}</div>
-    <label class="campo" style="margin-top:12px">Duração de cada aula (horas)<input id="fxAula" type="number" min="0.25" step="0.25" inputmode="decimal" value="${D.aulaHoras}"></label>
+let fxEd = null;
+function editarFaixas(t) { fxEd = { t, lista: FX(t).map(f => ({ ...f, de: FX(t).indexOf(f) })), aula: aulaH(t) }; desenharFaixas(); }
+function lerFaixas() {
+  fxEd.lista.forEach((f, i) => { f.nome = $('#fxn' + i).value.trim() || f.nome; f.cor = $('#fxc' + i).value; f.horas = Math.max(0, parseFloat(String($('#fx' + i).value).replace(',', '.')) || 0); });
+  fxEd.aula = Math.max(0.25, parseFloat(String($('#fxAula').value).replace(',', '.')) || 1.5);
+}
+function desenharFaixas() {
+  const { t, lista } = fxEd;
+  abrirModal(`<h2>Faixas e horas · ${TURMAS[t]}</h2><p class="pq">Valem só para a ${TURMAS[t]}. Horas que o aluno precisa cumprir <b>em cada faixa</b> para graduar para a próxima. A ordem da lista é a ordem de graduação.</p>
+    <div class="faixas-ed">${lista.map((f, i) => `<div class="linha" style="gap:6px;margin-bottom:8px">
+      <input id="fxc${i}" type="color" value="${f.cor}" style="width:38px;height:34px;padding:0;border:none;background:none">
+      <input id="fxn${i}" value="${esc(f.nome)}" class="grow" style="min-width:0">
+      <input id="fx${i}" type="number" min="0" step="0.5" inputmode="decimal" value="${f.horas}" style="width:64px"> h
+      <button class="btn" style="padding:4px 8px" onclick="moverFaixa(${i},-1)" ${i ? '' : 'disabled'}>↑</button><button class="btn" style="padding:4px 8px" onclick="moverFaixa(${i},1)" ${i < lista.length - 1 ? '' : 'disabled'}>↓</button>
+      <button class="btn verm" style="padding:4px 8px" onclick="apagarFaixa(${i})">✕</button></div>`).join('')}</div>
+    <button class="btn cheio" onclick="novaFaixa()">+ Adicionar faixa</button>
+    <label class="campo" style="margin-top:12px">Duração de cada aula desta turma (horas)<input id="fxAula" type="number" min="0.25" step="0.25" inputmode="decimal" value="${fxEd.aula}"></label>
     <p class="pq">Referência: 3 aulas de 1h30 por semana durante 6 meses ≈ 117 h.</p>
     <div class="linha"><button class="btn verde grow" onclick="salvarFaixas()">Salvar</button><button class="btn" onclick="fecharModal()">Cancelar</button></div>
-`);
+    <button class="btn cheio" style="margin-top:14px" onclick="abrirBackup()">💾 Cópia de segurança</button>`);
+}
+function moverFaixa(i, d) { lerFaixas(); const L = fxEd.lista; [L[i], L[i + d]] = [L[i + d], L[i]]; desenharFaixas(); }
+function novaFaixa() { lerFaixas(); fxEd.lista.push({ nome: 'Nova faixa', cor: '#cccccc', horas: 117, de: -1 }); desenharFaixas(); setTimeout(() => { const e = $('#fxn' + (fxEd.lista.length - 1)); e.focus(); e.select(); }, 50); }
+function apagarFaixa(i) {
+  lerFaixas(); const f = fxEd.lista[i];
+  const n = f.de >= 0 ? D.turmas[fxEd.t].alunos.filter(a => a.faixa === f.de).length : 0;
+  if (n) return toast(`${n} aluno(s) estão nesta faixa. Mude a faixa deles antes de apagar.`, 3500);
+  if (fxEd.lista.length === 1) return toast('A turma precisa de pelo menos uma faixa');
+  if (!confirm(`Apagar a faixa ${f.nome}?`)) return;
+  fxEd.lista.splice(i, 1); desenharFaixas();
 }
 function salvarFaixas() {
-  D.faixas.forEach((f, i) => f.horas = Math.max(0, parseFloat(String($('#fx' + i).value).replace(',', '.')) || 0));
-  D.aulaHoras = Math.max(0.25, parseFloat(String($('#fxAula').value).replace(',', '.')) || 1.5);
-  salvar(); render(); toast('Faixas atualizadas');
+  lerFaixas(); const { t, lista } = fxEd, mapa = {};
+  lista.forEach((f, i) => { if (f.de >= 0) mapa[f.de] = i; });
+  D.turmas[t].alunos.forEach(a => { if (mapa[a.faixa] != null) a.faixa = mapa[a.faixa]; });
+  D.turmas[t].faixas = lista.map(({ nome, cor, horas }) => ({ nome, cor, horas }));
+  D.turmas[t].aulaHoras = fxEd.aula;
+  salvar(); fecharModal(); render(); toast('Faixas atualizadas');
 }
 function abrirBackup() {
   abrirModal(`<h2>Cópia de segurança</h2><p class="pq">Os dados ficam só neste celular. Faça uma cópia de vez em quando e guarde no WhatsApp ou no Drive.</p>
@@ -170,9 +212,9 @@ function restaurar(arq) {
   if (!arq) return;
   arq.text().then(txt => {
     const n = JSON.parse(txt);
-    if (!n.turmas || !n.faixas) throw 0;
+    if (!n.turmas) throw 0;
     if (!confirm('Substituir todos os dados atuais por esta cópia?')) return;
-    D = n; salvar(); render(); toast('Dados restaurados');
+    D = migrar(n); salvar(); render(); toast('Dados restaurados');
   }).catch(() => toast('Arquivo inválido'));
 }
 
@@ -196,7 +238,7 @@ function telaChamada(app, t) {
     html += `<div class="linha" style="margin-bottom:10px"><button class="btn grow" onclick="todos('${t}','p')">Todos presentes</button><button class="btn grow" onclick="todos('${t}','')">Limpar</button></div>`;
     alunos.forEach(a => {
       const m = marcas[a.id] || '';
-      html += `<div class="card linha"><span class="faixa" style="background:${corFaixa(a.faixa)}"></span><span class="nome grow">${esc(a.nome)}</span>
+      html += `<div class="card linha"><span class="faixa" style="background:${corFaixa(t, a.faixa)}"></span><span class="nome grow">${esc(a.nome)}</span>
         <div class="pa"><button class="p ${m === 'p' ? 'on' : ''}" onclick="marcar('${a.id}','p')">P</button><button class="a ${m === 'a' ? 'on' : ''}" onclick="marcar('${a.id}','a')">F</button></div></div>`;
     });
     const p = alunos.filter(a => marcas[a.id] === 'p').length, f = alunos.filter(a => marcas[a.id] === 'a').length;
@@ -232,13 +274,13 @@ function finalizar(t) {
   const novosProntos = [];
   alunos.forEach(a => {
     if (marcas[a.id] === 'p') {
-      const antes = situacao(a).pronto;
-      a.horas = Math.round((a.horas + D.aulaHoras) * 100) / 100;
-      if (!antes && situacao(a).pronto) novosProntos.push(a.nome);
+      const antes = situacao(a, t).pronto;
+      a.horas = Math.round((a.horas + aulaH(t)) * 100) / 100;
+      if (!antes && situacao(a, t).pronto) novosProntos.push(a.nome);
     }
   });
   // guarda só a ÚLTIMA chamada (para gerar o PDF); a anterior é apagada
-  D.turmas[t].ultima = { data: ch.data, hora: ch.hora, alunos: alunos.map(a => ({ nome: a.nome, faixa: nomeFaixa(a.faixa), presente: marcas[a.id] === 'p' })) };
+  D.turmas[t].ultima = { data: ch.data, hora: ch.hora, alunos: alunos.map(a => ({ nome: a.nome, faixa: nomeFaixa(t, a.faixa), presente: marcas[a.id] === 'p' })) };
   D.turmas[t].ultimaChamada = ch.data;
   salvar(); marcas = {}; render();
   setTimeout(() => { const tl = $('.tela'); tl.scrollTo({ top: tl.scrollHeight, behavior: 'smooth' }); }, 50);
@@ -311,7 +353,7 @@ function telaAvisos(app, t) {
   const m = MODELOS[av.modelo];
   if (av.turma !== t || av.modeloCarregado !== av.modelo) {
     Object.assign(av, { turma: t, modeloCarregado: av.modelo, titulo: m.titulo, destaque: m.destaque, msg: m.msg, data: av.data || '', hora: av.hora || '', local: av.local || 'Academia Athletic Center' });
-    if (av.modelo === 'convocacao') av.msg += D.turmas[t].alunos.filter(a => situacao(a).pronto).map(a => a.nome).join(', ');
+    if (av.modelo === 'convocacao') av.msg += D.turmas[t].alunos.filter(a => situacao(a, t).pronto).map(a => a.nome).join(', ');
   }
   app.innerHTML = `<div class="tela fundo-escuro" style="background-image:url(img/dojo.jpg)">${topo('Avisos', 'Crie e envie pelo WhatsApp', 'menu/' + t)}
     <div class="modelos" style="grid-template-columns:1fr 1fr 1fr">${Object.entries(MODELOS).map(([k, v]) => `<button class="${k === av.modelo ? 'on' : ''}" onclick="av.modelo='${k}';render()">${v.nome}</button>`).join('')}</div>
@@ -434,7 +476,7 @@ function telaMensal(app, t) {
   else html += `<div class="card vazio">Nenhum aluno cadastrado.</div>`;
   alunos.forEach(a => {
     const s = mensal(a);
-    html += `<div class="card"><div class="linha"><span class="faixa" style="background:${corFaixa(a.faixa)}"></span><span class="nome grow" onclick="editarAluno('${t}','${a.id}')">${esc(a.nome)}</span>
+    html += `<div class="card"><div class="linha"><span class="faixa" style="background:${corFaixa(t, a.faixa)}"></span><span class="nome grow" onclick="editarAluno('${t}','${a.id}')">${esc(a.nome)}</span>
       <span class="tag ${s.st === 'ok' ? 'ok' : s.st === 'pendente' ? 'ruim' : 'neutra'}">${s.st === 'ok' ? 'EM DIA' : s.st === 'pendente' ? 'PENDENTE' : 'SEM REGISTRO'}</span></div>
       <div class="pq" style="margin:6px 0 8px">${s.txt}${a.pago ? ` · último: ${dataBR(a.pago)}` : ''}</div>
       <div class="linha"><button class="btn verde grow" onclick="pagar('${t}','${a.id}')">✔ Marcar pago hoje</button><button class="btn" onclick="editarAluno('${t}','${a.id}')">Editar data</button></div></div>`;
