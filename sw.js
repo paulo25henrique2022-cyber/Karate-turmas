@@ -1,19 +1,55 @@
-// Guarda os arquivos do app para funcionar sem internet.
-const VERSAO = 'karate-v1.6';
-const ARQS = ['./', 'index.html', 'style.css', 'app.js', 'pdf.js', 'manifest.json',
-  'img/inicio.jpg', 'img/juvenil.jpg', 'img/infantil.jpg', 'img/dojo.jpg', 'img/icone-192.png', 'img/icone-512.png', 'img/apple-icon.png', 'img/logo-athletic.png', 'img/logo-sensei.jpg', 'img/aviso-fundo.jpg', 'fontes/Anton-Regular.ttf', 'fontes/Montserrat.ttf'];
-self.addEventListener('install', e => { e.waitUntil(caches.open(VERSAO).then(c => c.addAll(ARQS))); self.skipWaiting(); });
-self.addEventListener('activate', e => {
-  e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== VERSAO).map(k => caches.delete(k)))));
-  self.clients.claim();
+// Service worker: faz o app abrir e funcionar sem internet.
+// Ao mudar arquivos do app, troque a versão abaixo (v2, v3...) para forçar a atualização.
+const CACHE = 'karate-turmas-v1';
+const ESSENCIAIS = ['./', './index.html', './manifest.json'];
+
+self.addEventListener('install', (e) => {
+  e.waitUntil(
+    caches.open(CACHE)
+      .then((c) => Promise.all(ESSENCIAIS.map((u) => c.add(u).catch(() => {}))))
+      .then(() => self.skipWaiting())
+  );
 });
-self.addEventListener('fetch', e => {
-  if (e.request.method !== 'GET') return;
-  // rede primeiro (pega atualizações), cache se estiver sem internet
-  // se o site sair do ar (erro 404 etc.) ou estiver sem internet, usa a cópia guardada no celular
-  const doCache = () => caches.match(e.request, { ignoreSearch: true });
-  e.respondWith(fetch(e.request).then(async r => {
-    if (r.ok) { const copia = r.clone(); caches.open(VERSAO).then(c => c.put(e.request, copia)); return r; }
-    return (await doCache()) || r;
-  }).catch(doCache));
+
+self.addEventListener('activate', (e) => {
+  e.waitUntil(
+    caches.keys()
+      .then((keys) => Promise.all(keys.filter((k) => k.startsWith('karate-turmas-') && k !== CACHE).map((k) => caches.delete(k))))
+      .then(() => self.clients.claim())
+  );
+});
+
+self.addEventListener('fetch', (e) => {
+  const req = e.request;
+  if (req.method !== 'GET') return;
+
+  // Abertura de páginas: tenta a rede; sem sinal, usa a cópia salva.
+  if (req.mode === 'navigate') {
+    e.respondWith(
+      fetch(req)
+        .then((res) => {
+          const copia = res.clone();
+          caches.open(CACHE).then((c) => c.put('./index.html', copia));
+          return res;
+        })
+        .catch(() => caches.match('./index.html').then((r) => r || caches.match('./')))
+    );
+    return;
+  }
+
+  // Demais arquivos (imagens, CSS, JS, fontes): usa o salvo e atualiza em segundo plano.
+  e.respondWith(
+    caches.match(req).then((salvo) => {
+      const rede = fetch(req)
+        .then((res) => {
+          if (res && (res.ok || res.type === 'opaque')) {
+            const copia = res.clone();
+            caches.open(CACHE).then((c) => c.put(req, copia));
+          }
+          return res;
+        })
+        .catch(() => salvo);
+      return salvo || rede;
+    })
+  );
 });
