@@ -1,3 +1,12 @@
+v1.7 – 27/11/2026
+- Tela inicial: 3 turmas novas (Uni-Júnior 1, 2 e 3), iguais à Juvenil (fundo de bambu, sem mensalidades). Cada turma tem seus próprios alunos, faixas e chamadas.
+- Dias de aula: embaixo de cada turma na tela inicial aparecem os dias e o horário; toque no ⚙ para configurar.
+- Frequência: botão "📄 Gerar PDF da frequência" (por faixa, horas, situação e destaque de quem pode graduar).
+- PDFs de frequência e de chamada com a logo da Athletic Center e "Professor responsável: Sensei Adriano".
+- Cópia de segurança: botão "📧 Enviar cópia para o Gmail" (direto com o script do Google; sem ele, escolha o Gmail no compartilhamento).
+- email/Codigo.gs atualizado (colar de novo no script do Google e implantar nova versão).
+- Os dados já cadastrados (Juvenil e Infantil) continuam iguais.
+
 v1.6
 - Faixas e horas separadas por turma: Infantil e Juvenil têm a própria lista de faixas, horas e duração da aula.
 - Faixa Branca adicionada no início das duas turmas (alunos já cadastrados continuam na mesma faixa).

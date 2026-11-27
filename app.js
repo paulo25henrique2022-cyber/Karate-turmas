@@ -3,7 +3,10 @@
 const FAIXAS = [
   ['Azul clara', '#8fd3ff'], ['Amarela', '#ffd83a'], ['Laranja', '#ff8c1a'], ['Verde', '#2fae4a'],
   ['Azul escuro', '#1d3f9a'], ['Roxa', '#7a3aa8'], ['Marrom', '#7a4a22'], ['Marrom 1', '#6a3c18'], ['Marrom 2', '#5a300f']];
-const TURMAS = { juvenil: 'Turma Juvenil', infantil: 'Turma Infantil' };
+const TURMAS = { juvenil: 'Turma Juvenil', infantil: 'Turma Infantil', uni1: 'Uni-Júnior 1', uni2: 'Uni-Júnior 2', uni3: 'Uni-Júnior 3' };
+const FUNDO = t => t === 'infantil' ? 'infantil' : 'juvenil'; // Uni-Júnior usam o bambu da Juvenil
+const PROFESSOR = 'Sensei Adriano';
+const DIAS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 const CHAVE = 'karate-dados-v1';
 
 function padrao() {
@@ -16,9 +19,16 @@ function padrao() {
 let D;
 try { D = JSON.parse(localStorage.getItem(CHAVE)) || padrao(); } catch { D = padrao(); }
 // v1.6: faixas e duração da aula separadas por turma, com a faixa Branca no início
+const faixasPadrao = () => [{ nome: 'Branca', cor: '#f2f2f2', horas: 117 }, ...FAIXAS.map(([nome, cor]) => ({ nome, cor, horas: 117 }))];
 function migrar(d) {
+  d = migrarV2(d);
+  // v1.7: turmas novas (Uni-Júnior) entram vazias; as que já existem não mudam
+  for (const t of Object.keys(TURMAS)) if (!d.turmas[t]) d.turmas[t] = { alunos: [], ultimaChamada: '', faixas: faixasPadrao(), aulaHoras: 1.5 };
+  return d;
+}
+function migrarV2(d) {
   if (d.v >= 2) return d;
-  for (const t of Object.keys(TURMAS)) {
+  for (const t of ['juvenil', 'infantil']) {
     const tu = d.turmas[t] = d.turmas[t] || { alunos: [], ultimaChamada: '' };
     if (!tu.faixas) {
       tu.faixas = [{ nome: 'Branca', cor: '#f2f2f2', horas: 117 }, ...FAIXAS.map(([nome, cor], i) => ({ nome, cor, horas: d.faixas?.[i]?.horas ?? 117 }))];
@@ -84,17 +94,35 @@ const placa = (txt, ic, acao, badge) => `<button class="placa" onclick="${acao}"
 function telaInicio(app) {
   app.innerHTML = `<div class="tela inicio" style="background-image:url(img/inicio.jpg)"><div class="centro">
     <div class="titulo">空手道</div>
-    <button class="placa" onclick="ir('menu/juvenil')"><span class="tigre"></span>Turma Juvenil<span class="tigre"></span></button>
-    <button class="placa" onclick="ir('menu/infantil')"><span class="tigre"></span>Turma Infantil<span class="tigre"></span></button>
+    ${Object.keys(TURMAS).map(t => `<button class="placa" onclick="ir('menu/${t}')"><span class="tigre"></span>${TURMAS[t]}<span class="tigre"></span></button>
+    <div class="dias-turma" onclick="editarDias('${t}')">${textoDias(t, true)} <span class="eng">⚙</span></div>`).join('')}
     <div style="margin-top:auto;text-align:center"><button class="btn" style="background:rgba(0,0,0,.55)" onclick="abrirBackup()">💾 Cópia de segurança</button></div>
   </div></div>`;
 }
+
+// ---------- dias de aula (v1.7) ----------
+function textoDias(t, html) {
+  const c = D.turmas[t].calendario || {}, dias = (c.dias || []).slice().sort((a, b) => a - b);
+  if (!dias.length) return html ? '<span class="sem">Dias não definidos</span>' : '';
+  const hora = c.hora ? ` · ${c.hora.replace(':', 'h')}` : '';
+  return html ? dias.map(d => `<span class="dia">${DIAS[d]}</span>`).join('') + esc(hora) : dias.map(d => DIAS[d]).join(', ') + hora;
+}
+let diasEd = [];
+function editarDias(t) {
+  const c = D.turmas[t].calendario || {}; diasEd = [...(c.dias || [])];
+  abrirModal(`<h2>Dias de aula · ${TURMAS[t]}</h2><p class="pq">Toque nos dias em que essa turma treina.</p>
+    <div class="linha dias-ed">${DIAS.map((n, i) => `<button class="btn ${diasEd.includes(i) ? 'on' : ''}" onclick="togDia(this,${i})">${n}</button>`).join('')}</div>
+    <label class="campo" style="margin-top:12px">Horário (opcional)<input id="diaHora" type="time" value="${c.hora || ''}"></label>
+    <div class="linha"><button class="btn grow" onclick="fecharModal()">Cancelar</button><button class="btn verde grow" onclick="salvarDias('${t}')">Salvar</button></div>`);
+}
+function togDia(b, i) { diasEd = diasEd.includes(i) ? diasEd.filter(x => x !== i) : [...diasEd, i]; b.classList.toggle('on'); }
+function salvarDias(t) { D.turmas[t].calendario = { dias: diasEd, hora: $('#diaHora').value }; salvar(); fecharModal(); render(); toast('Dias de aula salvos'); }
 
 // ---------- menus ----------
 function telaMenu(app, t) {
   const prontos = D.turmas[t].alunos.filter(a => situacao(a, t).pronto).length;
   const pend = t === 'infantil' ? pendentes(t) : 0;
-  app.innerHTML = `<div class="tela" style="background-image:url(img/${t}.jpg)">
+  app.innerHTML = `<div class="tela" style="background-image:url(img/${FUNDO(t)}.jpg)">
     ${topo(TURMAS[t], 'Escolha uma opção', 'inicio')}
     <div class="centro" style="min-height:calc(100% - 60px)">
       ${placa('Frequência', '📊', `ir('freq/${t}')`, prontos ? `${prontos} p/ graduar` : '')}
@@ -109,7 +137,8 @@ function telaFreq(app, t) {
   const alunos = D.turmas[t].alunos;
   const prontos = alunos.filter(a => situacao(a, t).pronto);
   let html = `<div class="tela fundo-escuro" style="background-image:url(img/dojo.jpg)">${topo('Frequência', TURMAS[t], 'menu/' + t)}
-    <div class="linha" style="margin-bottom:12px"><button class="btn grow" onclick="editarAluno('${t}')">+ Aluno</button><button class="btn" onclick="editarFaixas('${t}')">⚙ Faixas e horas</button></div>`;
+    <div class="linha" style="margin-bottom:12px"><button class="btn grow" onclick="editarAluno('${t}')">+ Aluno</button><button class="btn" onclick="editarFaixas('${t}')">⚙ Faixas e horas</button></div>
+    ${alunos.length ? `<button class="btn cheio" style="margin-bottom:12px" onclick="compartilharFreqPDF('${t}')">📄 Gerar PDF da frequência</button>` : ''}`;
   if (prontos.length) html += `<div class="aviso-topo">🥋 <b>${prontos.length} aluno(s) já completaram o tempo para graduar:</b> ${prontos.map(a => esc(a.nome)).join(', ')}</div>`;
   if (!alunos.length) html += `<div class="card vazio">Nenhum aluno cadastrado.<br>Toque em <b>+ Aluno</b>. Os alunos cadastrados aqui entram automaticamente na chamada.</div>`;
   FX(t).forEach(({ nome, cor, horas }, fi) => {
@@ -200,13 +229,39 @@ function salvarFaixas() {
   salvar(); fecharModal(); render(); toast('Faixas atualizadas');
 }
 function abrirBackup() {
-  abrirModal(`<h2>Cópia de segurança</h2><p class="pq">Os dados ficam só neste celular. Faça uma cópia de vez em quando e guarde no WhatsApp ou no Drive.</p>
+  abrirModal(`<h2>Cópia de segurança</h2><p class="pq">Os dados ficam só neste celular. Faça uma cópia de vez em quando e guarde no Gmail, WhatsApp ou Drive.</p>
     <div class="linha"><button class="btn grow" onclick="backup()">💾 Fazer cópia</button><label class="btn grow" style="text-align:center">📂 Restaurar<input type="file" accept=".json,application/json" hidden onchange="restaurar(this.files[0])"></label></div>
+    <label class="campo" style="margin-top:14px">Enviar cópia para o e-mail<input id="bkPara" type="email" multiple value="${esc(D.email?.para)}" placeholder="professor@gmail.com"></label>
+    <button class="btn verm cheio" onclick="backupGmail()">📧 Enviar cópia para o Gmail</button>
+    <p class="pq" id="bkStatus"></p>
     <button class="btn cheio" style="margin-top:12px" onclick="fecharModal()">Fechar</button>`);
 }
+const nomeBackup = () => `karate-backup-${hoje()}.json`;
 async function backup() {
-  const f = new File([JSON.stringify(D)], `karate-backup-${hoje()}.json`, { type: 'application/json' });
+  const f = new File([JSON.stringify(D)], nomeBackup(), { type: 'application/json' });
   await compartilharArquivo(f, 'Cópia de segurança – Karatê');
+}
+// Envia a cópia de segurança para o e-mail.
+// Com o script do Google configurado: vai direto. Sem ele: abre o compartilhamento (escolha o Gmail).
+async function backupGmail() {
+  const para = $('#bkPara').value.trim();
+  D.email = { ...(D.email || {}), para }; salvar();
+  const st = $('#bkStatus');
+  if (!D.email.url) {
+    toast('Escolha o Gmail na lista que vai abrir', 3000);
+    return backup();
+  }
+  if (!para) return toast('Digite o e-mail de destino');
+  if (!navigator.onLine) { st.textContent = '✖ Sem internet. Tente quando tiver sinal, ou use 💾 Fazer cópia.'; return; }
+  st.textContent = 'Enviando cópia…';
+  try {
+    const r = await fetch(D.email.url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ tipo: 'backup', nome: nomeBackup(), dados: JSON.stringify(D), data: dataBR(hoje()), para, codigo: D.email.codigo }) });
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.erro || 'falhou');
+    if (!j.backup) throw new Error('o script do Google está desatualizado — cole o novo Codigo.gs e implante de novo');
+    st.textContent = '✔ Cópia enviada! Confira o e-mail.';
+  } catch (e) { st.textContent = '✖ Falhou: ' + (navigator.onLine ? e.message : 'sem internet'); }
 }
 function restaurar(arq) {
   if (!arq) return;
@@ -307,9 +362,7 @@ async function enviarGmail(t) {
 function pdfChamada(t, u) {
   const p = new MiniPDF();
   const cab = () => {
-    p.retangulo(0, 0, 210, 28, [74, 42, 20]); p.retangulo(0, 28, 210, 2, [200, 32, 42]);
-    p.texto(15, 13, 'LISTA DE PRESENÇA', 18, true, [242, 193, 78]);
-    p.texto(15, 22, `${TURMAS[t]}  •  ${dataBR(u.data)} às ${u.hora.replace(':', 'h')}`, 12, false, [255, 246, 230]);
+    cabecalhoPDF(p, 'LISTA DE PRESENÇA', `${TURMAS[t]}  •  ${dataBR(u.data)} às ${u.hora.replace(':', 'h')}`);
     p.texto(15, 42, 'Nº', 10, true); p.texto(27, 42, 'Aluno', 10, true); p.texto(120, 42, 'Faixa', 10, true); p.texto(170, 42, 'Situação', 10, true);
   };
   cab();
@@ -325,6 +378,60 @@ function pdfChamada(t, u) {
   y += 6; if (y > 285) { p.novaPagina(); y = 20; }
   p.texto(15, y, `Total: ${u.alunos.length} alunos  •  Presentes: ${n}  •  Faltas: ${u.alunos.length - n}`, 11, true);
   return p.blob();
+}
+// cabeçalho comum dos PDFs: título, turma, professor responsável e logo da Athletic Center
+function cabecalhoPDF(p, titulo, linha) {
+  p.retangulo(0, 0, 210, 32, [74, 42, 20]); p.retangulo(0, 32, 210, 2, [200, 32, 42]);
+  p.texto(15, 12, titulo, 18, true, [242, 193, 78]);
+  p.texto(15, 20, linha, 11, false, [255, 246, 230]);
+  p.texto(15, 27, `Professor responsável: ${PROFESSOR}`, 10, true, [255, 246, 230]);
+  if (LOGO) p.imagem(181, 3, 26, 26, LOGO);
+}
+let LOGO = null; // logo convertida para JPEG ao abrir o app (funciona offline: a imagem está guardada no celular)
+(() => {
+  const im = new Image();
+  im.onload = () => {
+    try {
+      const c = document.createElement('canvas'); c.width = c.height = 300;
+      const g = c.getContext('2d'); g.fillStyle = '#4a2a14'; g.fillRect(0, 0, 300, 300); g.drawImage(im, 0, 0, 300, 300);
+      const b = atob(c.toDataURL('image/jpeg', 0.9).split(',')[1]), u8 = new Uint8Array(b.length);
+      for (let i = 0; i < b.length; i++) u8[i] = b.charCodeAt(i);
+      LOGO = { bytes: u8, w: 300, h: 300 };
+    } catch { }
+  };
+  im.src = 'img/logo-athletic.png';
+})();
+function pdfFrequencia(t) {
+  const p = new MiniPDF(), alunos = D.turmas[t].alunos, dias = textoDias(t, false);
+  const linha = `${TURMAS[t]}${dias ? '  •  ' + dias : ''}  •  gerado em ${dataBR(hoje())}`;
+  cabecalhoPDF(p, 'LISTA DE FREQUÊNCIA', linha);
+  let y = 46, prontos = 0;
+  const espaco = h => { if (y + h > 285) { p.novaPagina(); cabecalhoPDF(p, 'LISTA DE FREQUÊNCIA', linha); y = 46; } };
+  FX(t).forEach(({ nome, horas }, fi) => {
+    const lista = alunos.filter(a => a.faixa === fi).sort((a, b) => a.nome.localeCompare(b.nome));
+    if (!lista.length) return;
+    espaco(22);
+    p.texto(15, y, `Faixa ${nome} (${lista.length}) – exige ${fmtH(horas)}`, 12, true, [74, 42, 20]); y += 7;
+    p.texto(15, y, 'Aluno', 9, true); p.texto(110, y, 'Horas', 9, true); p.texto(145, y, 'Situação', 9, true); y += 6;
+    lista.forEach((a, i) => {
+      espaco(7);
+      const s = situacao(a, t);
+      if (s.pronto) { prontos++; p.retangulo(12, y - 5, 186, 7, [252, 230, 180]); }
+      else if (i % 2 === 0) p.retangulo(12, y - 5, 186, 7, [245, 236, 220]);
+      p.texto(15, y, a.nome.slice(0, 45), 10); p.texto(110, y, `${fmtH(a.horas)} / ${fmtH(s.precisa)}`, 10);
+      const sit = s.pronto ? 'PODE GRADUAR' : fi === FX(t).length - 1 && a.horas >= s.precisa ? 'Última faixa da lista' : `Faltam ${fmtH(s.falta)} (≈ ${s.aulas} aula${s.aulas === 1 ? '' : 's'})`;
+      p.texto(145, y, sit, 10, s.pronto, s.pronto ? [20, 120, 40] : [0, 0, 0]);
+      y += 7;
+    });
+    y += 5;
+  });
+  espaco(10);
+  p.texto(15, y, `Total: ${alunos.length} alunos  •  Podem graduar: ${prontos}`, 11, true);
+  return p.blob();
+}
+function compartilharFreqPDF(t) {
+  const f = new File([pdfFrequencia(t)], `Frequencia ${TURMAS[t]} ${dataBR(hoje()).replace(/\//g, '-')}.pdf`, { type: 'application/pdf' });
+  compartilharArquivo(f, `Frequência ${TURMAS[t]} – ${dataBR(hoje())}`);
 }
 async function compartilharArquivo(file, titulo) {
   try {

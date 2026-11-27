@@ -65,3 +65,14 @@ textarea{min-height:90px;resize:vertical}
 .inicio .centro{justify-content:flex-start;padding:0}
 .inicio .titulo{margin:3vh 0 6vh}
 .topo h1{background:rgba(0,0,0,.5);border-radius:12px;padding:4px 12px}
+
+/* v1.7: 5 turmas na tela inicial + dias de aula */
+.inicio .placa{margin-bottom:4px;padding:11px 16px}
+.inicio .titulo{margin:2vh 0 3vh}
+.dias-turma{display:flex;align-items:center;justify-content:center;gap:4px;flex-wrap:wrap;margin:0 auto 12px;max-width:420px;font-size:13px;color:#fff6e6;text-shadow:0 1px 3px #000;cursor:pointer}
+.dias-turma .dia{background:rgba(0,0,0,.6);border:1px solid var(--ouro2);color:var(--ouro);border-radius:6px;padding:1px 6px;font-size:12px;text-shadow:none}
+.dias-turma .sem{opacity:.8}
+.dias-turma .eng{background:rgba(0,0,0,.6);border-radius:50%;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;margin-left:4px}
+.dias-ed{flex-wrap:wrap;gap:6px}
+.dias-ed .btn{flex:1 0 12%;padding:10px 0;min-width:40px}
+.dias-ed .btn.on{background:var(--ouro);color:#1a0f08;border-color:var(--ouro)}

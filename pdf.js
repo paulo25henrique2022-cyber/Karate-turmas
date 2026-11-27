@@ -1,6 +1,6 @@
 // Gerador de PDF mínimo (A4, Helvetica, acentos do português). Sem bibliotecas externas.
 class MiniPDF {
-  constructor() { this.paginas = []; this.novaPagina(); }
+  constructor() { this.paginas = []; this.imagens = []; this.novaPagina(); }
   novaPagina() { this.ops = []; this.paginas.push(this.ops); }
   static txt(s) {
     // converte para WinAnsi (latin-1 cobre os acentos do português) e escapa
@@ -9,6 +9,7 @@ class MiniPDF {
       let c = ch.charCodeAt(0);
       if (ch === '–' || ch === '—') c = 0x2d;
       else if (ch === '•') c = 0x95;
+      else if (ch === '≈') c = 0x7e; // ~
       else if (c > 255) c = 0x3f;
       const t = String.fromCharCode(c);
       o += (t === '(' || t === ')' || t === '\\') ? '\\' + t : t;
@@ -24,29 +25,41 @@ class MiniPDF {
     const k = 2.8346;
     this.ops.push(`${cor.map(v => (v / 255).toFixed(3)).join(' ')} rg ${(x * k).toFixed(1)} ${((297 - y - h) * k).toFixed(1)} ${(w * k).toFixed(1)} ${(h * k).toFixed(1)} re f`);
   }
+  // imagem JPEG ({bytes,w,h}); x, y, w, h em mm, y de cima para baixo
+  imagem(x, y, w, h, img) {
+    let i = this.imagens.indexOf(img); if (i < 0) { this.imagens.push(img); i = this.imagens.length - 1; }
+    const k = 2.8346;
+    this.ops.push(`q ${(w * k).toFixed(1)} 0 0 ${(h * k).toFixed(1)} ${(x * k).toFixed(1)} ${((297 - y - h) * k).toFixed(1)} cm /Im${i + 1} Do Q`);
+  }
   blob() {
     const objs = [];
     const add = s => { objs.push(s); return objs.length; };
     const f1 = add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>');
     const f2 = add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>');
+    const imgIds = this.imagens.map(im => add({ cab: `<< /Type /XObject /Subtype /Image /Width ${im.w} /Height ${im.h} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${im.bytes.length} >>\nstream\n`, bytes: im.bytes }));
+    const xo = imgIds.length ? ` /XObject << ${imgIds.map((id, i) => `/Im${i + 1} ${id} 0 R`).join(' ')} >>` : '';
     const paisId = objs.length + 1 + this.paginas.length * 2;
     const kids = [];
     for (const ops of this.paginas) {
       const conteudo = ops.join('\n');
       const c = add(`<< /Length ${conteudo.length} >>\nstream\n${conteudo}\nendstream`);
-      kids.push(add(`<< /Type /Page /Parent ${paisId} 0 R /MediaBox [0 0 595.3 841.9] /Resources << /Font << /F1 ${f1} 0 R /F2 ${f2} 0 R >> >> /Contents ${c} 0 R >>`));
+      kids.push(add(`<< /Type /Page /Parent ${paisId} 0 R /MediaBox [0 0 595.3 841.9] /Resources << /Font << /F1 ${f1} 0 R /F2 ${f2} 0 R >>${xo} >> /Contents ${c} 0 R >>`));
     }
     add(`<< /Type /Pages /Kids [${kids.map(k => k + ' 0 R').join(' ')}] /Count ${kids.length} >>`);
     const cat = add(`<< /Type /Catalog /Pages ${paisId} 0 R >>`);
-    let out = '%PDF-1.4\n';
+    const partes = []; let tam = 0;
+    const put = s => { const b = typeof s === 'string' ? Uint8Array.from(s, c => c.charCodeAt(0) & 255) : s; partes.push(b); tam += b.length; };
+    put('%PDF-1.4\n');
     const pos = [];
-    objs.forEach((o, i) => { pos.push(out.length); out += `${i + 1} 0 obj\n${o}\nendobj\n`; });
-    const xref = out.length;
-    out += `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n` + pos.map(p => String(p).padStart(10, '0') + ' 00000 n \n').join('');
-    out += `trailer\n<< /Size ${objs.length + 1} /Root ${cat} 0 R >>\nstartxref\n${xref}\n%%EOF`;
-    const bytes = new Uint8Array(out.length);
-    for (let i = 0; i < out.length; i++) bytes[i] = out.charCodeAt(i) & 255;
-    return new Blob([bytes], { type: 'application/pdf' });
+    objs.forEach((o, i) => {
+      pos.push(tam);
+      if (typeof o === 'string') put(`${i + 1} 0 obj\n${o}\nendobj\n`);
+      else { put(`${i + 1} 0 obj\n${o.cab}`); put(o.bytes); put('\nendstream\nendobj\n'); }
+    });
+    const xref = tam;
+    put(`xref\n0 ${objs.length + 1}\n0000000000 65535 f \n` + pos.map(q => String(q).padStart(10, '0') + ' 00000 n \n').join(''));
+    put(`trailer\n<< /Size ${objs.length + 1} /Root ${cat} 0 R >>\nstartxref\n${xref}\n%%EOF`);
+    return new Blob(partes, { type: 'application/pdf' });
   }
 }
 
