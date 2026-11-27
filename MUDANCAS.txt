@@ -1,3 +1,8 @@
+v1.7.1 – 27/11/2026
+- Compartilhar (PDF e cópia de segurança): o app tenta abrir a lista de compartilhamento mesmo quando o navegador diz que não dá.
+  Se mesmo assim não der, baixa o arquivo e mostra uma janela com o motivo informado pelo celular.
+- Cópia de segurança agora é salva como .txt (o Android não compartilha arquivos .json). Cópias antigas .json continuam podendo ser restauradas.
+
 v1.7 – 27/11/2026
 - Tela inicial: 3 turmas novas (Uni-Júnior 1, 2 e 3), iguais à Juvenil (fundo de bambu, sem mensalidades). Cada turma tem seus próprios alunos, faixas e chamadas.
 - Dias de aula: embaixo de cada turma na tela inicial aparecem os dias e o horário; toque no ⚙ para configurar.

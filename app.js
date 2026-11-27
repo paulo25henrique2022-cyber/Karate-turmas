@@ -230,15 +230,15 @@ function salvarFaixas() {
 }
 function abrirBackup() {
   abrirModal(`<h2>Cópia de segurança</h2><p class="pq">Os dados ficam só neste celular. Faça uma cópia de vez em quando e guarde no Gmail, WhatsApp ou Drive.</p>
-    <div class="linha"><button class="btn grow" onclick="backup()">💾 Fazer cópia</button><label class="btn grow" style="text-align:center">📂 Restaurar<input type="file" accept=".json,application/json" hidden onchange="restaurar(this.files[0])"></label></div>
+    <div class="linha"><button class="btn grow" onclick="backup()">💾 Fazer cópia</button><label class="btn grow" style="text-align:center">📂 Restaurar<input type="file" accept=".json,.txt,application/json,text/plain" hidden onchange="restaurar(this.files[0])"></label></div>
     <label class="campo" style="margin-top:14px">Enviar cópia para o e-mail<input id="bkPara" type="email" multiple value="${esc(D.email?.para)}" placeholder="professor@gmail.com"></label>
     <button class="btn verm cheio" onclick="backupGmail()">📧 Enviar cópia para o Gmail</button>
     <p class="pq" id="bkStatus"></p>
     <button class="btn cheio" style="margin-top:12px" onclick="fecharModal()">Fechar</button>`);
 }
-const nomeBackup = () => `karate-backup-${hoje()}.json`;
+const nomeBackup = () => `karate-backup-${hoje()}.txt`; // .txt: o Android não compartilha arquivos .json
 async function backup() {
-  const f = new File([JSON.stringify(D)], nomeBackup(), { type: 'application/json' });
+  const f = new File([JSON.stringify(D)], nomeBackup(), { type: 'text/plain' });
   await compartilharArquivo(f, 'Cópia de segurança – Karatê');
 }
 // Envia a cópia de segurança para o e-mail.
@@ -434,14 +434,24 @@ function compartilharFreqPDF(t) {
   compartilharArquivo(f, `Frequência ${TURMAS[t]} – ${dataBR(hoje())}`);
 }
 async function compartilharArquivo(file, titulo) {
-  try {
-    if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: titulo }); return; }
-  } catch (e) { if (e.name === 'AbortError') return; }
+  // v1.7.1: tenta compartilhar mesmo se canShare disser que não, e mostra o motivo quando falha
+  let motivo = '';
+  if (!navigator.share) motivo = 'este navegador não tem a função de compartilhar';
+  else {
+    try { await navigator.share({ files: [file], title: titulo }); return; }
+    catch (e) {
+      if (e.name === 'AbortError') return; // a pessoa fechou a lista de compartilhamento
+      motivo = `${e.name}: ${e.message}`;
+    }
+  }
   // sem compartilhamento: baixa o arquivo (não fica guardado no app)
   const url = URL.createObjectURL(file), l = document.createElement('a');
   l.href = url; l.download = file.name; document.body.appendChild(l); l.click(); l.remove();
   setTimeout(() => URL.revokeObjectURL(url), 4000);
-  toast('Arquivo baixado. Envie pelo WhatsApp a partir dos Downloads.');
+  abrirModal(`<h2>Arquivo baixado</h2>
+    <p class="pq">O celular não deixou abrir a lista de compartilhamento, então o arquivo <b>${esc(file.name)}</b> foi salvo em <b>Downloads</b>. Para enviar, abra o Gmail ou o WhatsApp e anexe o arquivo de lá.</p>
+    <p class="pq" style="margin-top:10px">Motivo informado pelo celular (mande para quem cuida do app):<br><code style="user-select:all;word-break:break-all">${esc(motivo || 'desconhecido')} · ${esc(file.type)} · ${esc(navigator.userAgent)}</code></p>
+    <button class="btn cheio" style="margin-top:12px" onclick="fecharModal()">Fechar</button>`);
 }
 
 // ---------- avisos ----------
